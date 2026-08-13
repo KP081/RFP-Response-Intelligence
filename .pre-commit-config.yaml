@@ -1,0 +1,40 @@
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--config=backend/pyproject.toml, --fix]
+        files: ^backend/.*\.py$
+      - id: ruff-format
+        args: [--config=backend/pyproject.toml]
+        files: ^backend/.*\.py$
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        args: [--config-file=backend/pyproject.toml, backend/app]
+        pass_filenames: false
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: pnpm --dir frontend exec eslint . --max-warnings=0
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(js|jsx|ts|tsx)$
+      - id: prettier
+        name: prettier
+        entry: pnpm --dir frontend exec prettier --check .
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(js|jsx|ts|tsx|json|css|md|ya?ml)$

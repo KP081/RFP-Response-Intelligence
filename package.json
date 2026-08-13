@@ -1,0 +1,14 @@
+{
+  "name": "rfp-response-intelligence",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20 <21",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "lint": "pnpm --dir frontend lint",
+    "format:check": "pnpm --dir frontend format:check",
+    "typecheck": "pnpm --dir frontend typecheck"
+  }
+}
