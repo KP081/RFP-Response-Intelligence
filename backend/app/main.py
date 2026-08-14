@@ -18,7 +18,7 @@ from app.db.session import engine
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Release database connections when the application stops."""
 
     yield

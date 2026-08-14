@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: rfp_response
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rfp_response"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 5432:5432
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response
+      REDIS_URL: redis://localhost:6379/0
+      S3_ENDPOINT: http://localhost:9000
+      S3_BUCKET: rfp-response-intelligence
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      LOG_LEVEL: INFO
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.3"
+          enable-cache: true
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --frozen --all-groups
+      - name: Ruff
+        working-directory: backend
+        run: uv run ruff check .
+      - name: Mypy
+        working-directory: backend
+        run: uv run mypy app
+      - name: Pytest
+        working-directory: backend
+        run: uv run pytest
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: ESLint
+        run: pnpm --dir frontend lint
+      - name: TypeScript
+        run: pnpm --dir frontend typecheck
+      - name: Vitest
+        run: pnpm --dir frontend test
+
+  build-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build --tag rfp-response-intelligence-backend:ci backend
+      - name: Build frontend image
+        run: docker build --tag rfp-response-intelligence-frontend:ci frontend

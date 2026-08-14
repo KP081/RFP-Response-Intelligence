@@ -1,4 +1,6 @@
-FROM ghcr.io/astral-sh/uv:0.12.3-python3.12-bookworm-slim AS builder
+FROM python:3.12-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /uvx /bin/
 
 WORKDIR /app
 
