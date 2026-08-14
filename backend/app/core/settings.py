@@ -6,8 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime settings shared by the application.
 
-    The local database default makes the service importable before a developer has
-    created a `.env` file; deployed environments should always provide DATABASE_URL.
+    The default database URL intentionally uses a dedicated app_user role so RLS
+    is enforced in local development unless a deployment-specific `.env` overrides it.
     """
 
     model_config = SettingsConfigDict(
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "development"
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response"
+    database_url: str = "postgresql+asyncpg://app_user:app_password@localhost:5432/rfp_response"
     redis_url: str | None = None
     s3_endpoint: str | None = None
     s3_bucket: str | None = None

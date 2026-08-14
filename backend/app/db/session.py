@@ -1,7 +1,9 @@
 """Async SQLAlchemy engine and per-request session dependency."""
 
+import uuid
 from collections.abc import AsyncIterator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.settings import settings
@@ -15,3 +17,25 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
 
     async with async_session_factory() as session:
         yield session
+
+
+async def get_db_session_with_org_id(org_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
+    """Yield a database session with RLS context set for the given org_id.
+
+    This dependency sets the 'app.current_org_id' session variable that RLS
+    policies use to filter data by organization.
+
+    Args:
+        org_id: The organization ID to set in the RLS context.
+
+    Yields:
+        An AsyncSession with org_id set in the session context.
+    """
+
+    async with async_session_factory() as session:
+        # SET LOCAL must run inside the current transaction. Because SQLAlchemy
+        # opens one implicitly for the first statement, we use a parameterized
+        # statement to avoid quoting issues and keep this safe for UUID values.
+        await session.execute(text("SET LOCAL app.current_org_id = :org_id"), {"org_id": str(org_id)})
+        yield session
+
