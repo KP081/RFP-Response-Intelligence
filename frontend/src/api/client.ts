@@ -73,6 +73,10 @@ export class ApiClient {
     return this.request<T>(path, { ...options, method: "GET" });
   }
 
+  async post<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+    return this.request<T>(path, { ...options, method: "POST" });
+  }
+
   async request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
     const {
       correlationId: requestedCorrelationId,
@@ -88,6 +92,7 @@ export class ApiClient {
     const response = await fetch(this.url(path), {
       ...requestInit,
       headers,
+      credentials: "include",
     });
     const body = await parseResponseBody(response);
 

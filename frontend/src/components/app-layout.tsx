@@ -1,7 +1,8 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 const navigation = [
   { label: "Home", to: "/" },
@@ -9,6 +10,18 @@ const navigation = [
 ];
 
 export function AppLayout() {
+  const { user, memberships, currentOrg, logout, setCurrentOrg, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  const handleOrgChange = (orgId: string) => {
+    setCurrentOrg(orgId);
+    navigate(`/orgs/${orgId}`);
+  };
+
   return (
     <div className="min-h-screen">
       <header className="border-b bg-white">
@@ -36,10 +49,32 @@ export function AppLayout() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-slate-500 sm:inline">Not logged in</span>
-            <Button asChild size="sm">
-              <NavLink to="/login">Log in</NavLink>
-            </Button>
+            {isAuthenticated && currentOrg && (
+              <div className="flex items-center gap-3">
+                <select
+                  value={currentOrg.org_id}
+                  onChange={(e) => handleOrgChange(e.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {memberships.map((m) => (
+                    <option key={m.org_id} value={m.org_id}>
+                      {m.org_name} ({m.role})
+                    </option>
+                  ))}
+                </select>
+                <span className="hidden text-sm text-slate-500 sm:inline">
+                  {user?.display_name} ({user?.email})
+                </span>
+                <Button asChild size="sm" variant="ghost" onClick={handleLogout}>
+                  <NavLink to="/login">Log out</NavLink>
+                </Button>
+              </div>
+            )}
+            {!isAuthenticated && (
+              <Button asChild size="sm">
+                <NavLink to="/login">Log in</NavLink>
+              </Button>
+            )}
           </div>
         </nav>
       </header>

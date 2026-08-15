@@ -6,13 +6,12 @@ Safe to re-run multiple times.
 
 import asyncio
 import uuid
-from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.sql import select
 
 from app.core.settings import settings
-from app.db.models import Org, User, OrgMembership, Role, Base
+from app.db.models import Org, OrgMembership, Role, User
 
 
 async def seed_dev_data() -> None:

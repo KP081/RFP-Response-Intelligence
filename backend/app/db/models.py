@@ -8,13 +8,14 @@ from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     String,
     UniqueConstraint,
     func,
+)
+from sqlalchemy import (
+    Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -55,7 +56,7 @@ class TenantScopedMixin:
     @classmethod
     def _get_rls_policy_name(cls, org_column: str = "org_id") -> str:
         """Generate the name of the RLS policy for this table."""
-        return f"{cls.__tablename__}_rls_policy"
+        return f"{cls.__tablename__}_rls_policy"  # type: ignore[attr-defined]
 
 
 class Org(Base):

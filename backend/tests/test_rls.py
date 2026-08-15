@@ -19,19 +19,17 @@ See conftest.py for details on the RLS test configuration.
 import uuid
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.feature_flags import is_feature_enabled
 from app.db.models import (
+    FeatureFlag,
     Org,
-    User,
     OrgMembership,
     Role,
-    AuditLogEntry,
-    FeatureFlag,
+    User,
 )
-from app.db.session import get_db_session_with_org_id
 
 
 @pytest.fixture

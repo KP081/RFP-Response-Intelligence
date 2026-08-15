@@ -25,5 +25,16 @@ class Settings(BaseSettings):
     s3_secret_key: str | None = None
     log_level: str = "INFO"
 
+    # OIDC Configuration
+    oidc_issuer: str = "http://localhost:8081/realms/rfp-response-intelligence"
+    oidc_client_id: str = "rfp-response-intelligence-web"
+    oidc_client_secret: str = "local-development-only"
+
+    # JWT Configuration
+    jwt_secret_key: str = "dev-secret-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 15
+    jwt_refresh_token_expire_days: int = 30
+
 
 settings = Settings()

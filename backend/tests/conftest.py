@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.db.models import Base
 
-
 SUPERUSER_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response"
 APP_USER_DATABASE_URL = "postgresql+asyncpg://app_user:app_password@localhost:5432/rfp_response"
 
