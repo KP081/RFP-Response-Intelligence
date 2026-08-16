@@ -79,3 +79,29 @@ async def require_org_admin(
     )
 
     return membership
+
+
+async def require_org_member(
+    org_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> OrgMembership:
+    """Check if the current user is a member of the given org (any role)."""
+    membership_data = await auth_service.get_membership(current_user.id, org_id)
+
+    if membership_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this organization",
+        )
+
+    org, membership, role = membership_data
+
+    # Set the RLS context variable for this session
+    await session.execute(
+        text("SET LOCAL app.current_org_id = :org_id"),
+        {"org_id": str(org_id)},
+    )
+
+    return membership

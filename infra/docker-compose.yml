@@ -114,6 +114,64 @@ services:
       retries: 12
       start_period: 5s
 
+  worker:
+    build:
+      context: ../backend
+    env_file:
+      - .env
+    command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
+    volumes:
+      - ../backend/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A app.workers.celery_app inspect ping",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  celery-beat:
+    build:
+      context: ../backend
+    env_file:
+      - .env
+    command: celery -A app.workers.celery_app beat --loglevel=INFO --scheduler celery.beat.PersistentScheduler
+    volumes:
+      - ../backend/app:/app/app
+      - celery_beat_data:/app/celerybeat-schedule
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: ../backend
+    env_file:
+      - .env
+    command: celery -A app.workers.celery_app flower --port=5555 --basic_auth=admin:admin
+    ports:
+      - "5555:5555"
+    volumes:
+      - ../backend/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+
   frontend:
     build:
       context: ../frontend
@@ -135,3 +193,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  celery_beat_data:

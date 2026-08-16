@@ -18,6 +18,9 @@ dependencies = [
   "uvicorn[standard]>=0.32.0,<1.0.0",
   "aioboto3>=15.5.0",
   "python-multipart>=0.0.32",
+  "celery>=5.4.0,<6.0.0",
+  "redis>=5.0.0,<6.0.0",
+  "flower>=2.0.0,<3.0.0",
 ]
 
 [dependency-groups]
@@ -59,4 +62,8 @@ module = ["tests.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 check_untyped_defs = false
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["app.workers.*"]
 disallow_untyped_decorators = false

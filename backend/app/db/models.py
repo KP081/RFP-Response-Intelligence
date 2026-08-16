@@ -51,6 +51,16 @@ class InviteStatus(str, Enum):
     REVOKED = "revoked"
 
 
+class JobStatus(str, Enum):
+    """Enumeration of pipeline job statuses."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    RETRYING = "retrying"
+
+
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
 
@@ -308,3 +318,33 @@ class DocumentVersion(Base, TenantScopedMixin):
 
     # Relationships
     document: Mapped["Document"] = relationship(back_populates="versions")
+
+
+class PipelineJob(Base, TenantScopedMixin):
+    """Generic pipeline job status tracking — RLS-scoped."""
+
+    __tablename__ = "pipeline_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    job_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    status: Mapped[JobStatus] = mapped_column(
+        SQLEnum(JobStatus, native_enum=False), nullable=False, default=JobStatus.QUEUED
+    )
+    current_stage: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    progress_pct: Mapped[int] = mapped_column(nullable=False, default=0)
+    error_message: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
