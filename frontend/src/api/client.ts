@@ -77,6 +77,10 @@ export class ApiClient {
     return this.request<T>(path, { ...options, method: "POST" });
   }
 
+  async delete<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+    return this.request<T>(path, { ...options, method: "DELETE" });
+  }
+
   async request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
     const {
       correlationId: requestedCorrelationId,

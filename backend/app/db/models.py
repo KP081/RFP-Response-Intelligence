@@ -24,6 +24,25 @@ if TYPE_CHECKING:
     pass
 
 
+class DocumentType(str, Enum):
+    """Enumeration of document types."""
+
+    RFP = "rfp"
+    RFQ = "rfq"
+    RFI = "rfi"
+    KNOWLEDGE_BASE = "knowledge_base"
+    OTHER = "other"
+
+
+class DocumentStatus(str, Enum):
+    """Enumeration of document statuses."""
+
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    READY = "ready"
+    FAILED = "failed"
+
+
 class InviteStatus(str, Enum):
     """Enumeration of invite statuses."""
 
@@ -234,3 +253,58 @@ class OrgInvite(Base, TenantScopedMixin):
     # Relationships
     org: Mapped["Org"] = relationship(back_populates="invites")
     invited_by: Mapped["User"] = relationship(foreign_keys=[invited_by_user_id])
+
+
+class Document(Base, TenantScopedMixin):
+    """Document metadata — RLS-scoped."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    uploaded_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    document_type: Mapped[DocumentType] = mapped_column(
+        SQLEnum(DocumentType, native_enum=False), nullable=False, default=DocumentType.OTHER
+    )
+    status: Mapped[DocumentStatus] = mapped_column(
+        SQLEnum(DocumentStatus, native_enum=False), nullable=False, default=DocumentStatus.UPLOADED
+    )
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    uploaded_by: Mapped["User"] = relationship()
+    versions: Mapped[list["DocumentVersion"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan", order_by="DocumentVersion.created_at"
+    )
+
+
+class DocumentVersion(Base, TenantScopedMixin):
+    """Document version history — RLS-scoped."""
+
+    __tablename__ = "document_versions"
+    __table_args__ = (UniqueConstraint("document_id", "id", name="uq_document_version"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    document: Mapped["Document"] = relationship(back_populates="versions")
