@@ -1,0 +1,31 @@
+Metadata-Version: 2.4
+Name: rfp-response-intelligence-backend
+Version: 0.1.0
+Summary: Backend service for RFP Response Intelligence
+Requires-Python: <3.13,>=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: alembic<2.0.0,>=1.14.0
+Requires-Dist: asyncpg<1.0.0,>=0.30.0
+Requires-Dist: authlib<2.0.0,>=1.3.0
+Requires-Dist: cryptography<43.0.0,>=42.0.0
+Requires-Dist: fastapi<1.0.0,>=0.115.0
+Requires-Dist: python-dotenv<2.0.0,>=1.0.1
+Requires-Dist: pydantic-settings<3.0.0,>=2.6.0
+Requires-Dist: sqlalchemy<3.0.0,>=2.0.0
+Requires-Dist: structlog<26.0.0,>=24.4.0
+Requires-Dist: uvicorn[standard]<1.0.0,>=0.32.0
+Requires-Dist: aioboto3>=15.5.0
+Requires-Dist: python-multipart>=0.0.32
+Requires-Dist: celery<6.0.0,>=5.4.0
+Requires-Dist: redis<6.0.0,>=5.0.0
+Requires-Dist: flower<3.0.0,>=2.0.0
+Requires-Dist: openai<2.0.0,>=1.50.0
+
+# Backend
+
+FastAPI service for RFP Response Intelligence. Dependencies and developer tooling
+are managed with `uv` from this directory.
+
+Run the service with `uv run uvicorn app.main:app --reload`. It reads local
+configuration from `backend/.env` (or environment variables); start from
+`infra/.env.example` and provide `DATABASE_URL` for a real health check.

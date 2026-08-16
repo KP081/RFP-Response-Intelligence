@@ -40,5 +40,13 @@ class Settings(BaseSettings):
     # Frontend URL for invite links
     frontend_url: str = "http://localhost:5173"
 
+    # LLM Provider Configuration
+    llm_provider: str = "mock"
+    llm_api_key: str = "not-used-in-local-development"
+    llm_default_model_fast: str = "gpt-4o-mini"
+    llm_default_model_reasoning: str = "gpt-4o"
+    llm_default_model_vision: str = "gpt-4o"
+    llm_cache_ttl_seconds: int = 86400
+
 
 settings = Settings()

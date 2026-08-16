@@ -61,6 +61,14 @@ class JobStatus(str, Enum):
     RETRYING = "retrying"
 
 
+class LLMCallStatus(str, Enum):
+    """Enumeration of LLM call statuses."""
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    CACHE_HIT = "cache_hit"
+
+
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
 
@@ -347,4 +355,29 @@ class PipelineJob(Base, TenantScopedMixin):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+
+class LLMCall(Base, TenantScopedMixin):
+    """LLM call logging for cost tracking and observability — RLS-scoped."""
+
+    __tablename__ = "llm_calls"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    task_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    model_tier: Mapped[str] = mapped_column(String(50), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    input_tokens: Mapped[int] = mapped_column(nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(nullable=False, default=0)
+    latency_ms: Mapped[int] = mapped_column(nullable=False, default=0)
+    cost_estimate: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    status: Mapped[LLMCallStatus] = mapped_column(
+        SQLEnum(LLMCallStatus, native_enum=False), nullable=False, default=LLMCallStatus.SUCCESS
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -11,7 +11,6 @@ dependencies = [
   "cryptography>=42.0.0,<43.0.0",
   "fastapi>=0.115.0,<1.0.0",
   "python-dotenv>=1.0.1,<2.0.0",
-  "python-jose[cryptography]>=3.3.0,<4.0.0",
   "pydantic-settings>=2.6.0,<3.0.0",
   "sqlalchemy>=2.0.0,<3.0.0",
   "structlog>=24.4.0,<26.0.0",
@@ -21,7 +20,12 @@ dependencies = [
   "celery>=5.4.0,<6.0.0",
   "redis>=5.0.0,<6.0.0",
   "flower>=2.0.0,<3.0.0",
+  "openai>=1.50.0,<2.0.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
 
 [dependency-groups]
 dev = [

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
 
 from app.db.models import JobStatus, Org, OrgMembership, PipelineJob, Role, User
 from app.modules.jobs.router import create_ping_job, get_job_status
