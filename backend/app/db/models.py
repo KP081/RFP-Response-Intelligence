@@ -39,6 +39,7 @@ class DocumentStatus(str, Enum):
 
     UPLOADED = "uploaded"
     PROCESSING = "processing"
+    READY_FOR_CHUNKING = "ready_for_chunking"
     READY = "ready"
     FAILED = "failed"
 
@@ -326,6 +327,31 @@ class DocumentVersion(Base, TenantScopedMixin):
 
     # Relationships
     document: Mapped["Document"] = relationship(back_populates="versions")
+
+
+class RawExtraction(Base, TenantScopedMixin):
+    """Raw extraction output from document ingestion — RLS-scoped."""
+
+    __tablename__ = "raw_extractions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    blocks: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    extractor_used: Mapped[str] = mapped_column(String(50), nullable=False)
+    extracted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    document: Mapped["Document"] = relationship()
+    version: Mapped["DocumentVersion"] = relationship()
 
 
 class PipelineJob(Base, TenantScopedMixin):

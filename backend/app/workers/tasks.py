@@ -12,8 +12,13 @@ from celery.exceptions import MaxRetriesExceededError  # type: ignore[import-unt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import JobStatus, PipelineJob
+from app.core.storage import get_object_store
+from app.db.models import DocumentStatus, JobStatus, PipelineJob, RawExtraction
 from app.db.session import async_session_factory
+from app.modules.ingestion.extraction import (
+    extract_docx_content,
+    extract_pdf_content,
+)
 from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -185,3 +190,107 @@ async def ping_task(*, org_id: uuid.UUID, correlation_id: str, document_id: uuid
     """Simple ping task for testing the task queue end-to-end."""
     await asyncio.sleep(1)
     return {"status": "pong", "message": "Task queue is working"}
+
+
+@pipeline_task(job_type="extract_document_content", max_retries=2, retry_backoff=30)
+async def extract_document_content(
+    *,
+    org_id: uuid.UUID,
+    correlation_id: str,
+    document_id: uuid.UUID,
+) -> dict[str, Any]:
+    """
+    Extract text and tables from a document.
+
+    This task:
+    1. Fetches the document from storage
+    2. Routes to appropriate extractor based on mime_type
+    3. Runs extraction + header/footer stripping
+    4. Persists results to raw_extractions
+    5. Updates document status
+    """
+    from app.db.models import Document, DocumentVersion
+
+    session = _get_db_session()
+    object_store = get_object_store()
+
+    try:
+        # Get document and version
+        doc_stmt = select(Document).where(Document.id == document_id)
+        doc_result = await session.execute(doc_stmt)
+        document = doc_result.scalar_one_or_none()
+        if not document:
+            raise ValueError(f"Document {document_id} not found")
+
+        version_stmt = select(DocumentVersion).where(DocumentVersion.document_id == document_id).order_by(DocumentVersion.created_at.desc())
+        version_result = await session.execute(version_stmt)
+        version = version_result.scalar_one_or_none()
+        if not version:
+            raise ValueError(f"No version found for document {document_id}")
+
+        # Update document status to processing
+        document.status = DocumentStatus.PROCESSING
+        await session.commit()
+
+        # Download file from storage
+        file_data = await object_store.get(version.storage_key)
+
+        # Route to appropriate extractor
+        mime_type = document.mime_type
+        if mime_type == "application/pdf":
+            extractor_name = "pdfplumber"
+            blocks = extract_pdf_content(file_data)
+        elif mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            extractor_name = "python-docx"
+            blocks = extract_docx_content(file_data)
+        else:
+            # Unsupported format - mark as failed
+            document.status = DocumentStatus.FAILED
+            await session.commit()
+            error_msg = f"Unsupported mime type: {mime_type}. Needs OCR (not yet supported)."
+            logger.error("extraction_failed_unsupported_format", document_id=str(document_id), mime_type=mime_type)
+            raise ValueError(error_msg)
+
+        # Persist raw extraction
+        raw_extraction = RawExtraction(
+            org_id=org_id,
+            document_id=document_id,
+            version_id=version.id,
+            blocks=blocks,
+            extractor_used=extractor_name,
+        )
+        session.add(raw_extraction)
+
+        # Update document status to ready_for_chunking
+        document.status = DocumentStatus.READY_FOR_CHUNKING
+
+        await session.commit()
+
+        logger.info(
+            "extraction_complete",
+            document_id=str(document_id),
+            blocks_count=len(blocks),
+            extractor=extractor_name,
+        )
+
+        return {
+            "status": "success",
+            "document_id": str(document_id),
+            "blocks_count": len(blocks),
+            "extractor": extractor_name,
+        }
+
+    except Exception:
+        # Update document status to failed
+        try:
+            doc_stmt = select(Document).where(Document.id == document_id)
+            doc_result = await session.execute(doc_stmt)
+            document = doc_result.scalar_one_or_none()
+            if document:
+                document.status = DocumentStatus.FAILED
+                await session.commit()
+        except Exception:
+            pass
+        raise
+    finally:
+        await session.close()

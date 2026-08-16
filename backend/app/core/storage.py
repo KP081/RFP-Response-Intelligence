@@ -30,6 +30,11 @@ class ObjectStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get(self, key: str) -> bytes:
+        """Download an object from storage."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_presigned_url(self, key: str, expires_in: int = 3600) -> PresignedUrlResult:
         """Generate a presigned URL for downloading an object."""
         raise NotImplementedError
@@ -87,6 +92,13 @@ class S3ObjectStore(ObjectStore):
                 Body=data,
                 ContentType=content_type,
             )
+
+    async def get(self, key: str) -> bytes:
+        """Download an object from storage."""
+        async with self._client() as client:
+            response = await client.get_object(Bucket=self.bucket, Key=key)
+            async with response["Body"] as stream:
+                return await stream.read()
 
     async def get_presigned_url(self, key: str, expires_in: int = 3600) -> PresignedUrlResult:
         """Generate a presigned URL for downloading an object."""

@@ -20,7 +20,7 @@ from typing import Any, Optional, TypeVar
 
 import redis.asyncio as redis
 from pydantic import BaseModel, ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.models import LLMCall, LLMCallStatus
