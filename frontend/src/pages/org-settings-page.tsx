@@ -34,6 +34,7 @@ import {
   DialogCloseButton,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
+import { Link } from "react-router-dom";
 
 interface OrgMember {
   user_id: string;
@@ -138,6 +139,8 @@ export function OrgSettingsPage() {
 
   const currentUserMembership = memberships.find((m) => m.org_id === orgId);
   const isAdmin = currentUserMembership?.role === "admin";
+  const isAuthorized = currentUserMembership &&
+    ["admin", "security", "compliance"].includes(currentUserMembership.role);
 
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -374,6 +377,14 @@ export function OrgSettingsPage() {
               <Label>Total Members</Label>
               <p className="text-2xl font-semibold">{members?.length || 0}</p>
             </div>
+            {isAuthorized && (
+              <div>
+                <Label>Audit Log</Label>
+                <Link to={`/orgs/${orgId}/audit-log`}>
+                  <Button variant="outline">View Audit Log</Button>
+                </Link>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

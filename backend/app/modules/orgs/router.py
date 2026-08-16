@@ -19,6 +19,8 @@ from app.modules.orgs.dependencies import (
     require_org_admin,
 )
 from app.modules.orgs.schemas import (
+    AuditLogEntryResponse,
+    AuditLogListResponse,
     InviteAcceptResponse,
     InviteCreate,
     InviteResponse,
@@ -244,3 +246,94 @@ async def remove_member(
         )
 
     return MemberRemoveResponse(message="Member removed successfully")
+
+
+@router.get("/{org_id}/audit-log", response_model=AuditLogListResponse)
+async def list_audit_log(
+    org_id: uuid.UUID,
+    membership: Annotated[OrgMembership, Depends(require_role(Role.ADMIN, Role.SECURITY, Role.COMPLIANCE))],
+    page: int = 1,
+    page_size: int = 50,
+    resource_type: str | None = None,
+    action: str | None = None,
+    actor_user_id: uuid.UUID | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    session: Annotated[AsyncSession, Depends(get_db_session)] = None,  # type: ignore[assignment]
+) -> AuditLogListResponse:
+    """List audit log entries for an organization.
+
+    Requires admin, security, or compliance role.
+    Supports filtering by resource_type, action, actor_user_id, and date range.
+    """
+    from datetime import datetime
+
+    from sqlalchemy import and_, func, select
+
+    from app.db.models import AuditLogEntry
+
+    stmt = select(AuditLogEntry).where(AuditLogEntry.org_id == org_id)
+
+    filters = []
+    if resource_type:
+        filters.append(AuditLogEntry.resource_type == resource_type)
+    if action:
+        filters.append(AuditLogEntry.action == action)
+    if actor_user_id:
+        filters.append(AuditLogEntry.actor_user_id == actor_user_id)
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            filters.append(AuditLogEntry.created_at >= start_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid start_date format. Use ISO 8601.",
+            )
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            filters.append(AuditLogEntry.created_at <= end_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid end_date format. Use ISO 8601.",
+            )
+
+    if filters:
+        stmt = stmt.where(and_(*filters))
+
+    # Order by created_at desc
+    stmt = stmt.order_by(AuditLogEntry.created_at.desc())
+
+    # Count total
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total_result = await session.execute(count_stmt)
+    total = total_result.scalar_one()
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    stmt = stmt.offset(offset).limit(page_size)
+
+    result = await session.execute(stmt)
+    entries = result.scalars().all()
+
+    return AuditLogListResponse(
+        items=[
+            AuditLogEntryResponse(
+                id=entry.id,
+                org_id=entry.org_id,
+                actor_user_id=entry.actor_user_id,
+                action=entry.action,
+                resource_type=entry.resource_type,
+                resource_id=entry.resource_id,
+                event_metadata=entry.event_metadata,
+                correlation_id=entry.correlation_id,
+                created_at=entry.created_at,
+            )
+            for entry in entries
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )

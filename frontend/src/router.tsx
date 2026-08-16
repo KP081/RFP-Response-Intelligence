@@ -8,6 +8,7 @@ import { OrgSettingsPage } from "@/pages/org-settings-page";
 import { InviteAcceptPage } from "@/pages/invite-accept-page";
 import { AuthCallback } from "@/pages/auth-callback-page";
 import { DocumentsPage } from "@/pages/documents-page";
+import { AuditLogPage } from "@/pages/audit-log-page";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export const router = createBrowserRouter([
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
       { path: "orgs/:orgId", element: <ProtectedRoute><OrganizationPage /></ProtectedRoute> },
       { path: "orgs/:orgId/settings", element: <ProtectedRoute><OrgSettingsPage /></ProtectedRoute> },
       { path: "orgs/:orgId/documents", element: <ProtectedRoute><DocumentsPage /></ProtectedRoute> },
+      { path: "orgs/:orgId/audit-log", element: <ProtectedRoute><AuditLogPage /></ProtectedRoute> },
     ],
   },
 ]);

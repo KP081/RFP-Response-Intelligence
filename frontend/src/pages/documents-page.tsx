@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +33,7 @@ function DocumentUploadForm({ orgId }: { orgId: string }) {
   const [documentType, setDocumentType] = useState<DocumentType>("other");
   const [isDragging, setIsDragging] = useState(false);
   const queryClient = useQueryClient();
-  const { currentOrg } = useAuth();
+  useAuth();
 
   const uploadMutation = useMutation({
     mutationFn: () => uploadDocument({ orgId, file: file!, documentType }),

@@ -63,8 +63,8 @@ class TestOrgsService:
 
         assert org.name == "New Org"
         assert org.settings == {}
-        assert mock_session.add.call_count == 2
-        assert mock_session.flush.call_count == 2
+        assert mock_session.add.call_count == 3
+        assert mock_session.flush.call_count == 3
 
     @pytest.mark.asyncio
     async def test_create_org_logs_audit_entry(

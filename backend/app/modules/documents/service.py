@@ -1,14 +1,18 @@
 """Service for document operations."""
 
 import uuid
-from datetime import datetime, timezone
 from typing import Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import get_object_store
-from app.db.models import AuditLogEntry, Document, DocumentStatus, DocumentType, DocumentVersion, OrgMembership, User
+from app.db.models import (
+    Document,
+    DocumentStatus,
+    DocumentType,
+    DocumentVersion,
+)
 
 
 class DocumentsService:
@@ -17,28 +21,6 @@ class DocumentsService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self._object_store = get_object_store()
-
-    async def _log_audit(
-        self,
-        org_id: uuid.UUID,
-        actor_user_id: Optional[uuid.UUID],
-        action: str,
-        resource_type: str,
-        resource_id: str,
-        metadata: dict[str, object],
-    ) -> None:
-        """Write an audit log entry."""
-        audit_entry = AuditLogEntry(
-            org_id=org_id,
-            actor_user_id=actor_user_id,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            event_metadata=metadata,
-            correlation_id=str(uuid.uuid4()),
-        )
-        self.session.add(audit_entry)
-        await self.session.flush()
 
     def _build_storage_key(self, org_id: uuid.UUID, document_id: uuid.UUID, version_id: uuid.UUID, filename: str) -> str:
         """Build the storage key following the convention: {org_id}/{document_id}/{version}/{filename}"""
@@ -92,26 +74,11 @@ class DocumentsService:
         # Flush to get IDs
         await self.session.flush()
 
-        # Log audit
-        await self._log_audit(
-            org_id=org_id,
-            actor_user_id=user_id,
-            action="document.upload",
-            resource_type="document",
-            resource_id=str(document_id),
-            metadata={
-                "filename": filename,
-                "mime_type": mime_type,
-                "document_type": document_type.value,
-                "size_bytes": size_bytes,
-            },
-        )
-
         return document
 
     async def get_document(self, document_id: uuid.UUID) -> Optional[Document]:
         """Get a document by ID."""
-        stmt = select(Document).where(Document.id == document_id, Document.is_deleted == False)
+        stmt = select(Document).where(Document.id == document_id, Document.is_deleted.is_(False))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -127,7 +94,7 @@ class DocumentsService:
         document_type: Optional[DocumentType] = None,
     ) -> Sequence[Document]:
         """List documents for an organization, optionally filtered by type."""
-        stmt = select(Document).where(Document.org_id == org_id, Document.is_deleted == False)
+        stmt = select(Document).where(Document.org_id == org_id, Document.is_deleted.is_(False))
         if document_type:
             stmt = stmt.where(Document.document_type == document_type)
         stmt = stmt.order_by(Document.created_at.desc())
@@ -149,24 +116,8 @@ class DocumentsService:
         if not document:
             return False
 
-        org_id = document.org_id
-        document_id_str = str(document_id)
-        filename = document.filename
-
         # Soft delete
         document.is_deleted = True
         await self.session.flush()
-
-        # Log audit
-        await self._log_audit(
-            org_id=org_id,
-            actor_user_id=actor_user_id,
-            action="document.delete",
-            resource_type="document",
-            resource_id=document_id_str,
-            metadata={
-                "filename": filename,
-            },
-        )
 
         return True

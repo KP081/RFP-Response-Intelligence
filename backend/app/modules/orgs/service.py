@@ -80,7 +80,7 @@ class OrgsService:
             .order_by(OrgMembership.created_at)
         )
         result = await self.session.execute(stmt)
-        return [row.tuple() for row in result.all()]
+        return [tuple(row) for row in result.all()]
 
     async def create_invite(
         self,

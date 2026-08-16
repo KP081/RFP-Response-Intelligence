@@ -16,11 +16,9 @@ export interface DocumentResponse {
   created_at: string;
 }
 
-export interface DocumentUploadResponse extends DocumentResponse {}
-
-export interface DocumentListResponse extends DocumentResponse {}
-
-export interface DocumentDetailResponse extends DocumentResponse {}
+export type DocumentUploadResponse = DocumentResponse;
+export type DocumentListResponse = DocumentResponse;
+export type DocumentDetailResponse = DocumentResponse;
 
 export interface DocumentDeleteResponse {
   message: string;

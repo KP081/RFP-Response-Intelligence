@@ -3,16 +3,15 @@
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import AsyncGenerator, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncGenerator, Optional
 
-import aioboto3
-from botocore.config import Config as BotoConfig
+import aioboto3  # type: ignore[import-untyped]
+from botocore.config import Config as BotoConfig  # type: ignore[import-untyped]
 
 from app.core.settings import settings
 
-
 if TYPE_CHECKING:
-    from aiobotocore.client import AioBaseClient
+    from aiobotocore.client import AioBaseClient  # type: ignore[import-untyped]
 
 
 @dataclass

@@ -72,3 +72,26 @@ class MemberRemoveResponse(BaseModel):
     """Schema for member removal response."""
 
     message: str
+
+
+class AuditLogEntryResponse(BaseModel):
+    """Schema for audit log entry response."""
+
+    id: UUID
+    org_id: UUID
+    actor_user_id: UUID | None
+    action: str
+    resource_type: str
+    resource_id: str
+    event_metadata: dict[str, object]
+    correlation_id: str
+    created_at: datetime
+
+
+class AuditLogListResponse(BaseModel):
+    """Schema for paginated audit log list response."""
+
+    items: list[AuditLogEntryResponse]
+    total: int
+    page: int
+    page_size: int
