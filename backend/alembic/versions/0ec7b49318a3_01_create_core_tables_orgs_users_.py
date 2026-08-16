@@ -111,9 +111,9 @@ def upgrade() -> None:
 
     # Enable RLS on tenant-scoped tables with FORCE to prevent owner bypass.
     # Use the shared helper so future tenant-scoped tables reuse the same policy design.
-    op.execute(enable_rls('org_memberships'))
-    op.execute(enable_rls('audit_log'))
-    op.execute(enable_rls('feature_flags'))
+    for table in ['org_memberships', 'audit_log', 'feature_flags']:
+        for stmt in enable_rls(table):
+            op.execute(stmt)
 
 
 def downgrade() -> None:

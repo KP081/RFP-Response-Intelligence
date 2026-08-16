@@ -24,6 +24,14 @@ if TYPE_CHECKING:
     pass
 
 
+class InviteStatus(str, Enum):
+    """Enumeration of invite statuses."""
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REVOKED = "revoked"
+
+
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
 
@@ -83,6 +91,9 @@ class Org(Base):
         back_populates="org", cascade="all, delete-orphan"
     )
     feature_flags: Mapped[list["FeatureFlag"]] = relationship(
+        back_populates="org", cascade="all, delete-orphan"
+    )
+    invites: Mapped[list["OrgInvite"]] = relationship(
         back_populates="org", cascade="all, delete-orphan"
     )
 
@@ -192,3 +203,34 @@ class FeatureFlag(Base, TenantScopedMixin):
 
     # Relationships
     org: Mapped["Org"] = relationship(back_populates="feature_flags")
+
+
+class OrgInvite(Base, TenantScopedMixin):
+    """Organization invite — RLS-scoped."""
+
+    __tablename__ = "org_invites"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[Role] = mapped_column(
+        SQLEnum(Role, native_enum=False), nullable=False
+    )
+    token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    invited_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[InviteStatus] = mapped_column(
+        SQLEnum(InviteStatus, native_enum=False), nullable=False, default=InviteStatus.PENDING
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    # Relationships
+    org: Mapped["Org"] = relationship(back_populates="invites")
+    invited_by: Mapped["User"] = relationship(foreign_keys=[invited_by_user_id])

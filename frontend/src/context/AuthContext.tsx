@@ -15,6 +15,7 @@ interface OrgMembership {
   org_id: string;
   org_name: string;
   role: string;
+  user_id: string;
 }
 
 interface MeResponse {

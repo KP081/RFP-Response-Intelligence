@@ -6,7 +6,6 @@ import { useAuth } from "@/context/AuthContext";
 
 const navigation = [
   { label: "Home", to: "/" },
-  { label: "Organizations", to: "/orgs/example-org" },
 ];
 
 export function AppLayout() {
@@ -47,6 +46,19 @@ export function AppLayout() {
                 {item.label}
               </NavLink>
             ))}
+            {isAuthenticated && currentOrg && (
+              <NavLink
+                to={`/orgs/${currentOrg.org_id}/settings`}
+                className={({ isActive }) =>
+                  cn(
+                    "rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+                    isActive && "bg-slate-100 text-slate-950",
+                  )
+                }
+              >
+                Organization Settings
+              </NavLink>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {isAuthenticated && currentOrg && (

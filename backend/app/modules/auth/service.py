@@ -241,6 +241,7 @@ class AuthService:
                 org_id=org.id,
                 org_name=org.name,
                 role=membership.role.value,
+                user_id=membership.user_id,
             )
             for org, membership, role in memberships_data
         ]

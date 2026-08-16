@@ -7,11 +7,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.session import engine
 from app.modules.auth import auth_router
+from app.modules.orgs import orgs_router
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 router.include_router(auth_router)
+router.include_router(orgs_router)
 
 
 async def check_database_connection() -> bool:

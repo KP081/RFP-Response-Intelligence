@@ -42,6 +42,7 @@ class OrgMembershipResponse(BaseModel):
     org_id: UUID
     org_name: str
     role: str
+    user_id: UUID
 
 
 class MeResponse(BaseModel):

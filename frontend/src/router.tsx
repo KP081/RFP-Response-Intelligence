@@ -4,6 +4,8 @@ import { AppLayout } from "@/components/app-layout";
 import { HomePage } from "@/pages/home-page";
 import { LoginPage } from "@/pages/login-page";
 import { OrganizationPage } from "@/pages/organization-page";
+import { OrgSettingsPage } from "@/pages/org-settings-page";
+import { InviteAcceptPage } from "@/pages/invite-accept-page";
 import { AuthCallback } from "@/pages/auth-callback-page";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
@@ -14,7 +16,9 @@ export const router = createBrowserRouter([
       { index: true, element: <ProtectedRoute><HomePage /></ProtectedRoute> },
       { path: "login", element: <LoginPage /> },
       { path: "auth/callback", element: <AuthCallback /> },
+      { path: "invites/:token", element: <InviteAcceptPage /> },
       { path: "orgs/:orgId", element: <ProtectedRoute><OrganizationPage /></ProtectedRoute> },
+      { path: "orgs/:orgId/settings", element: <ProtectedRoute><OrgSettingsPage /></ProtectedRoute> },
     ],
   },
 ]);

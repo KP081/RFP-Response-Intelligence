@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -11,8 +11,8 @@ from jose import jwt
 from app.core.settings import settings
 from app.db.models import Org, OrgMembership, Role, User
 from app.modules.auth.dependencies import (
-    get_current_user,
     get_current_org,
+    get_current_user,
     require_role,
     require_role_dependency,
 )
