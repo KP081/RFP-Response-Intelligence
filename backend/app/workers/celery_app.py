@@ -28,6 +28,8 @@ celery_app.conf.update(
     task_default_queue="default",
     task_routes={
         "app.workers.tasks.ping_task": {"queue": "default"},
+        "app.workers.tasks.extract_document_content": {"queue": "ingestion"},
+        "app.workers.tasks.chunk_document": {"queue": "ingestion"},
     },
 )
 

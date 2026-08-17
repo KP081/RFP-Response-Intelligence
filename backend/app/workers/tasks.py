@@ -13,8 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import get_object_store
-from app.db.models import DocumentStatus, JobStatus, PipelineJob, RawExtraction
+from app.db.models import Chunk, ChunkType, DocumentStatus, JobStatus, PipelineJob, RawExtraction
 from app.db.session import async_session_factory
+from app.modules.ingestion.chunking import create_chunks_from_blocks
 from app.modules.ingestion.extraction import (
     extract_docx_content,
     extract_pdf_content,
@@ -278,6 +279,114 @@ async def extract_document_content(
             "document_id": str(document_id),
             "blocks_count": len(blocks),
             "extractor": extractor_name,
+        }
+
+    except Exception:
+        # Update document status to failed
+        try:
+            doc_stmt = select(Document).where(Document.id == document_id)
+            doc_result = await session.execute(doc_stmt)
+            document = doc_result.scalar_one_or_none()
+            if document:
+                document.status = DocumentStatus.FAILED
+                await session.commit()
+        except Exception:
+            pass
+        raise
+    finally:
+        await session.close()
+
+
+@pipeline_task(job_type="chunk_document", max_retries=2, retry_backoff=30)
+async def chunk_document(
+    *,
+    org_id: uuid.UUID,
+    correlation_id: str,
+    document_id: uuid.UUID,
+) -> dict[str, Any]:
+    """
+    Chunk a document's raw extractions into retrieval-ready chunks.
+
+    This task:
+    1. Reads raw_extractions for the document version
+    2. Runs semantic chunking with structure-aware boundaries
+    3. Persists chunks to the chunks table
+    4. Updates document status
+    """
+    from app.db.models import Document, DocumentVersion, RawExtraction
+
+    session = _get_db_session()
+
+    try:
+        # Get document and version
+        doc_stmt = select(Document).where(Document.id == document_id)
+        doc_result = await session.execute(doc_stmt)
+        document = doc_result.scalar_one_or_none()
+        if not document:
+            raise ValueError(f"Document {document_id} not found")
+
+        version_stmt = select(DocumentVersion).where(DocumentVersion.document_id == document_id).order_by(DocumentVersion.created_at.desc())
+        version_result = await session.execute(version_stmt)
+        version = version_result.scalar_one_or_none()
+        if not version:
+            raise ValueError(f"No version found for document {document_id}")
+
+        # Update document status to processing
+        document.status = DocumentStatus.PROCESSING
+        await session.commit()
+
+        # Get raw extraction
+        extraction_stmt = select(RawExtraction).where(RawExtraction.version_id == version.id)
+        extraction_result = await session.execute(extraction_stmt)
+        raw_extraction = extraction_result.scalar_one_or_none()
+        if not raw_extraction:
+            raise ValueError(f"No raw extraction found for version {version.id}")
+
+        blocks = raw_extraction.blocks
+        if not blocks:
+            raise ValueError("Raw extraction has no blocks")
+
+        # Create chunks
+        chunks_data = create_chunks_from_blocks(blocks)
+
+        # Persist chunks
+        for chunk_data in chunks_data:
+            chunk = Chunk(
+                org_id=org_id,
+                document_id=document_id,
+                version_id=version.id,
+                chunk_index=chunk_data["chunk_index"],
+                content=chunk_data["content"],
+                chunk_type=ChunkType(chunk_data["chunk_type"]),
+                page_start=chunk_data["page_start"],
+                page_end=chunk_data["page_end"],
+                section_path=chunk_data["section_path"],
+                token_count=chunk_data["token_count"],
+            )
+            session.add(chunk)
+
+        # Update document status to ready (for now; full pipeline in task 15)
+        document.status = DocumentStatus.READY
+
+        await session.commit()
+
+        # Count by type
+        type_counts: dict[str, int] = {}
+        for c in chunks_data:
+            type_counts[c["chunk_type"]] = type_counts.get(c["chunk_type"], 0) + 1
+
+        logger.info(
+            "chunking_complete",
+            document_id=str(document_id),
+            chunks_count=len(chunks_data),
+            type_counts=type_counts,
+        )
+
+        return {
+            "status": "success",
+            "document_id": str(document_id),
+            "chunks_count": len(chunks_data),
+            "type_counts": type_counts,
         }
 
     except Exception:

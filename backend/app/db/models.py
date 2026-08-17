@@ -70,6 +70,14 @@ class LLMCallStatus(str, Enum):
     CACHE_HIT = "cache_hit"
 
 
+class ChunkType(str, Enum):
+    """Enumeration of chunk types."""
+
+    TEXT = "text"
+    TABLE = "table"
+    HEADING = "heading"
+
+
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
 
@@ -407,3 +415,35 @@ class LLMCall(Base, TenantScopedMixin):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class Chunk(Base, TenantScopedMixin):
+    """Document chunk for retrieval — RLS-scoped."""
+
+    __tablename__ = "chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_index: Mapped[int] = mapped_column(nullable=False)
+    content: Mapped[str] = mapped_column(nullable=False)
+    chunk_type: Mapped[ChunkType] = mapped_column(
+        SQLEnum(ChunkType, native_enum=False), nullable=False
+    )
+    page_start: Mapped[int] = mapped_column(nullable=False)
+    page_end: Mapped[int] = mapped_column(nullable=False)
+    section_path: Mapped[Optional[str]] = mapped_column(nullable=True)
+    token_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    document: Mapped["Document"] = relationship()
+    version: Mapped["DocumentVersion"] = relationship()
