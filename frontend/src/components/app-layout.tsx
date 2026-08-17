@@ -47,17 +47,30 @@ export function AppLayout() {
               </NavLink>
             ))}
             {isAuthenticated && currentOrg && (
-              <NavLink
-                to={`/orgs/${currentOrg.org_id}/settings`}
-                className={({ isActive }) =>
-                  cn(
-                    "rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950",
-                    isActive && "bg-slate-100 text-slate-950",
-                  )
-                }
-              >
-                Organization Settings
-              </NavLink>
+              <>
+                <NavLink
+                  to={`/orgs/${currentOrg.org_id}/search`}
+                  className={({ isActive }) =>
+                    cn(
+                      "rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+                      isActive && "bg-slate-100 text-slate-950",
+                    )
+                  }
+                >
+                  Search
+                </NavLink>
+                <NavLink
+                  to={`/orgs/${currentOrg.org_id}/settings`}
+                  className={({ isActive }) =>
+                    cn(
+                      "rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+                      isActive && "bg-slate-100 text-slate-950",
+                    )
+                  }
+                >
+                  Organization Settings
+                </NavLink>
+              </>
             )}
           </div>
           <div className="flex items-center gap-3">

@@ -10,6 +10,7 @@ from app.modules.auth import auth_router
 from app.modules.documents import documents_router
 from app.modules.jobs import jobs_router
 from app.modules.orgs import orgs_router
+from app.modules.search import search_router
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -18,6 +19,7 @@ router.include_router(auth_router)
 router.include_router(orgs_router)
 router.include_router(documents_router)
 router.include_router(jobs_router)
+router.include_router(search_router)
 
 
 async def check_database_connection() -> bool:

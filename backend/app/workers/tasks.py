@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.storage import get_object_store
 from app.db.models import Chunk, ChunkType, DocumentStatus, JobStatus, PipelineJob, RawExtraction
 from app.db.session import async_session_factory
+from app.llm.gateway import ModelGateway
 from app.modules.ingestion.chunking import create_chunks_from_blocks
+from app.modules.ingestion.embedding import embed_document_chunks as embed_chunks_func
 from app.modules.ingestion.extraction import (
     extract_docx_content,
     extract_pdf_content,
@@ -184,6 +186,87 @@ def pipeline_task(
         return wrapper
 
     return decorator
+
+
+@pipeline_task(job_type="embed_document_chunks", max_retries=2, retry_backoff=30)
+async def embed_document_chunks(
+    *,
+    org_id: uuid.UUID,
+    correlation_id: str,
+    document_id: uuid.UUID,
+) -> dict[str, Any]:
+    """
+    Embed all chunks for a document.
+
+    This task:
+    1. Creates a ModelGateway instance
+    2. Embeds all chunks that don't have embeddings yet
+    3. Updates document status to READY on success
+    """
+    from app.db.models import Document, DocumentVersion
+
+    session = _get_db_session()
+    model_gateway = ModelGateway()
+
+    try:
+        # Get document and version
+        doc_stmt = select(Document).where(Document.id == document_id)
+        doc_result = await session.execute(doc_stmt)
+        document = doc_result.scalar_one_or_none()
+        if not document:
+            raise ValueError(f"Document {document_id} not found")
+
+        version_stmt = select(DocumentVersion).where(DocumentVersion.document_id == document_id).order_by(DocumentVersion.created_at.desc())
+        version_result = await session.execute(version_stmt)
+        version = version_result.scalar_one_or_none()
+        if not version:
+            raise ValueError(f"No version found for document {document_id}")
+
+        # Update document status to processing
+        document.status = DocumentStatus.PROCESSING
+        await session.commit()
+
+        # Embed chunks
+        result = await embed_chunks_func(
+            session=session,
+            org_id=org_id,
+            document_id=document_id,
+            model_gateway=model_gateway,
+            correlation_id=correlation_id,
+        )
+
+        # Update document status to READY (search-ready state)
+        document.status = DocumentStatus.READY
+        await session.commit()
+
+        logger.info(
+            "embedding_complete",
+            document_id=str(document_id),
+            embedded_count=result.get("embedded_count", 0),
+            skipped_count=result.get("skipped_count", 0),
+        )
+
+        return {
+            "status": "success",
+            "document_id": str(document_id),
+            "embedded_count": result.get("embedded_count", 0),
+            "skipped_count": result.get("skipped_count", 0),
+        }
+
+    except Exception:
+        # Update document status to failed
+        try:
+            doc_stmt = select(Document).where(Document.id == document_id)
+            doc_result = await session.execute(doc_stmt)
+            document = doc_result.scalar_one_or_none()
+            if document:
+                document.status = DocumentStatus.FAILED
+                await session.commit()
+        except Exception:
+            pass
+        raise
+    finally:
+        await session.close()
 
 
 @pipeline_task(job_type="ping", max_retries=3, retry_backoff=10)

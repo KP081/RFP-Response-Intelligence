@@ -5,6 +5,8 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
+import sqlalchemy as sa
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -440,6 +442,13 @@ class Chunk(Base, TenantScopedMixin):
     page_end: Mapped[int] = mapped_column(nullable=False)
     section_path: Mapped[Optional[str]] = mapped_column(nullable=True)
     token_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(1536), nullable=True)
+    search_vector: Mapped[str] = mapped_column(
+        sa.dialects.postgresql.TSVECTOR,
+        sa.Computed("to_tsvector('english', coalesce(content, ''))", persisted=True),
+        nullable=False,
+        insert_default=None,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
