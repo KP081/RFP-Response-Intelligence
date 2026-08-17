@@ -8,8 +8,9 @@ Create Date: 2026-08-17
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from pgvector.sqlalchemy import Vector
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "09_add_embedding_search_vector"

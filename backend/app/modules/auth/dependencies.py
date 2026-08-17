@@ -1,7 +1,7 @@
 """FastAPI dependencies for authentication and authorization."""
 
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -10,14 +10,21 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import OrgMembership, Role, User
-from app.db.session import get_db_session
 from app.modules.auth.schemas import TokenPayload
 from app.modules.auth.service import AuthService
 
 security = HTTPBearer(auto_error=False)
 
 
-async def get_auth_service(session: AsyncSession = Depends(get_db_session)) -> AuthService:
+def get_db_session_dependency() -> Callable[..., AsyncIterator[AsyncSession]]:
+    """Lazy dependency for database session to avoid circular imports."""
+    from app.db.session import get_db_session
+    return get_db_session
+
+
+async def get_auth_service(
+    session: Annotated[AsyncSession, Depends(get_db_session_dependency)],
+) -> AuthService:
     """Get the authentication service."""
     return AuthService(session)
 
@@ -68,7 +75,7 @@ async def get_current_user(
 async def get_current_org(
     org_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session_dependency)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> OrgMembership:
     """Validate that the current user has membership in the requested org.
@@ -97,7 +104,7 @@ async def get_current_org(
 async def require_role_dependency(
     allowed_roles: set[str],
     current_user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session_dependency)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     org_id: uuid.UUID,
 ) -> OrgMembership:
@@ -144,7 +151,7 @@ def require_role(*roles: Role) -> Callable[..., Awaitable[OrgMembership]]:
 
     async def role_dependency(
         current_user: Annotated[User, Depends(get_current_user)],
-        session: Annotated[AsyncSession, Depends(get_db_session)],
+        session: Annotated[AsyncSession, Depends(get_db_session_dependency)],
         auth_service: Annotated[AuthService, Depends(get_auth_service)],
         request: Request,
     ) -> OrgMembership:

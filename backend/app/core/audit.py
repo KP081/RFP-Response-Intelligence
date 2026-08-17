@@ -1,7 +1,7 @@
 """Audit logging core utilities."""
 
 import uuid
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, AsyncIterator, Coroutine
 from functools import wraps
 from typing import Annotated, Any, Optional, TypeVar
 
@@ -9,7 +9,6 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AuditLogEntry, User
-from app.db.session import get_db_session
 from app.modules.auth.dependencies import get_current_user
 
 
@@ -148,10 +147,16 @@ def audited(
     return decorator
 
 
+def get_db_session_dependency() -> Callable[..., AsyncIterator[AsyncSession]]:
+    """Lazy dependency for database session to avoid circular imports."""
+    from app.db.session import get_db_session
+    return get_db_session
+
+
 async def get_audit_session(
     org_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session_dependency)],
 ) -> AsyncSession:
     """Dependency that provides a session with audit context set.
 

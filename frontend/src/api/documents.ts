@@ -3,6 +3,22 @@ import { apiClient } from "@/api/client";
 export type DocumentType = "rfp" | "rfq" | "rfi" | "knowledge_base" | "other";
 export type DocumentStatus = "uploaded" | "processing" | "ready" | "failed";
 
+export type PipelineStage = "extract" | "chunk" | "embed" | "ocr" | "caption_figures" | "dedupe";
+export type PipelineStageStatus = "queued" | "running" | "succeeded" | "failed" | "skipped";
+
+export interface PipelineStageStatusInfo {
+  status: PipelineStageStatus;
+  complete: boolean;
+}
+
+export interface PipelineStatusResponse {
+  document_id: string;
+  status: DocumentStatus;
+  current_stage: PipelineStage | "completed" | null;
+  pipeline_stage_status: PipelineStageStatus;
+  stages: Record<PipelineStage, PipelineStageStatusInfo>;
+}
+
 export interface DocumentResponse {
   id: string;
   org_id: string;
@@ -96,4 +112,49 @@ export async function downloadDocument(orgId: string, documentId: string): Promi
 
 export async function deleteDocument(orgId: string, documentId: string): Promise<DocumentDeleteResponse> {
   return apiClient.delete<DocumentDeleteResponse>(`/orgs/${orgId}/documents/${documentId}`);
+}
+
+export async function getPipelineStatus(
+  orgId: string,
+  documentId: string
+): Promise<PipelineStatusResponse> {
+  return apiClient.get<PipelineStatusResponse>(`/orgs/${orgId}/documents/${documentId}/pipeline-status`);
+}
+
+export async function retryPipeline(
+  orgId: string,
+  documentId: string
+): Promise<{ status: string; correlation_id: string }> {
+  return apiClient.post<{ status: string; correlation_id: string }>(
+    `/orgs/${orgId}/documents/${documentId}/pipeline-retry`,
+    {}
+  );
+}
+
+export function createPipelineEventStream(
+  orgId: string,
+  documentId: string,
+  onMessage: (data: PipelineStatusResponse) => void,
+  onError?: (error: Error) => void
+): EventSource {
+  const url = `${import.meta.env.VITE_API_BASE_URL}/orgs/${orgId}/documents/${documentId}/pipeline-events`;
+  const eventSource = new EventSource(url, { withCredentials: true });
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data) as PipelineStatusResponse;
+      onMessage(data);
+    } catch (e) {
+      console.error("Failed to parse pipeline event:", e);
+    }
+  };
+
+  eventSource.onerror = (error) => {
+    if (onError) {
+      onError(new Error("SSE connection error"));
+    }
+    // EventSource automatically reconnects
+  };
+
+  return eventSource;
 }

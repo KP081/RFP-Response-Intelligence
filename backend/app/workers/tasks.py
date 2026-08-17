@@ -13,7 +13,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import get_object_store
-from app.db.models import Chunk, ChunkType, DocumentStatus, JobStatus, PipelineJob, RawExtraction
+from app.db.models import (
+    Chunk,
+    ChunkType,
+    Document,
+    DocumentStatus,
+    JobStatus,
+    PipelineJob,
+    PipelineStage,
+    PipelineStageStatus,
+    RawExtraction,
+)
 from app.db.session import async_session_factory
 from app.llm.gateway import ModelGateway
 from app.modules.ingestion.chunking import create_chunks_from_blocks
@@ -22,6 +32,7 @@ from app.modules.ingestion.extraction import (
     extract_docx_content,
     extract_pdf_content,
 )
+from app.modules.ingestion.pipeline import run_pipeline
 from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
@@ -186,6 +197,186 @@ def pipeline_task(
         return wrapper
 
     return decorator
+
+
+@pipeline_task(job_type="run_ingestion_pipeline", max_retries=2, retry_backoff=60)
+async def run_ingestion_pipeline(
+    *,
+    org_id: uuid.UUID,
+    correlation_id: str,
+    document_id: uuid.UUID,
+    start_from_stage: str | None = None,
+) -> dict[str, Any]:
+    """
+    Run the full document ingestion pipeline.
+
+    This task:
+    1. Creates a pipeline job record
+    2. Runs the pipeline orchestrator with idempotency checks
+    3. Supports resuming from a specific stage (for retry)
+
+    Args:
+        org_id: Organization ID
+        correlation_id: Correlation ID for tracing
+        document_id: Document ID
+        start_from_stage: Optional stage name to start from (for retry/resume)
+
+    Returns:
+        Dictionary with pipeline execution results
+    """
+    session = _get_db_session()
+
+    try:
+        # Get document
+        doc_stmt = select(Document).where(Document.id == document_id)
+        doc_result = await session.execute(doc_stmt)
+        document = doc_result.scalar_one_or_none()
+        if not document:
+            raise ValueError(f"Document {document_id} not found")
+
+        # Update document status to processing
+        document.status = DocumentStatus.PROCESSING
+        await session.commit()
+
+        # Parse start_from_stage if provided
+        start_stage = None
+        if start_from_stage:
+            try:
+                start_stage = PipelineStage(start_from_stage)
+            except ValueError:
+                raise ValueError(f"Invalid start_from_stage: {start_from_stage}")
+
+        # Run pipeline
+        results = await run_pipeline(
+            session=session,
+            org_id=org_id,
+            document_id=document_id,
+            correlation_id=correlation_id,
+            start_from_stage=start_stage,
+        )
+
+        # Collect results
+        stage_results = []
+        for result in results:
+            stage_results.append({
+                "stage": result.stage.value,
+                "status": result.status.value,
+                "output": result.output,
+                "error": result.error,
+            })
+
+        # Check if all stages succeeded
+        all_succeeded = all(r.status in (PipelineStageStatus.SUCCEEDED, PipelineStageStatus.SKIPPED) for r in results)
+
+        return {
+            "status": "success" if all_succeeded else "failed",
+            "document_id": str(document_id),
+            "stages": stage_results,
+        }
+
+    except Exception:
+        # Update document status to failed
+        try:
+            doc_stmt = select(Document).where(Document.id == document_id)
+            doc_result = await session.execute(doc_stmt)
+            document = doc_result.scalar_one_or_none()
+            if document:
+                document.status = DocumentStatus.FAILED
+                await session.commit()
+        except Exception:
+            pass
+        raise
+    finally:
+        await session.close()
+
+
+@pipeline_task(job_type="retry_ingestion_pipeline", max_retries=2, retry_backoff=60)
+async def retry_ingestion_pipeline(
+    *,
+    org_id: uuid.UUID,
+    correlation_id: str,
+    document_id: uuid.UUID,
+) -> dict[str, Any]:
+    """
+    Retry a failed document ingestion pipeline from the failed stage.
+
+    This task:
+    1. Finds the failed stage from the document's pipeline_stage field
+    2. Runs the pipeline from that stage
+
+    Args:
+        org_id: Organization ID
+        correlation_id: Correlation ID for tracing
+        document_id: Document ID
+
+    Returns:
+        Dictionary with pipeline execution results
+    """
+    session = _get_db_session()
+
+    try:
+        # Get document
+        doc_stmt = select(Document).where(Document.id == document_id)
+        doc_result = await session.execute(doc_stmt)
+        document = doc_result.scalar_one_or_none()
+        if not document:
+            raise ValueError(f"Document {document_id} not found")
+
+        if document.pipeline_stage_status != PipelineStageStatus.FAILED:
+            raise ValueError(f"Document {document_id} is not in failed state")
+
+        # Get the failed stage
+        failed_stage = document.pipeline_stage
+        if not failed_stage:
+            raise ValueError(f"Document {document_id} has no failed stage")
+
+        # Update document status to processing
+        document.status = DocumentStatus.PROCESSING
+        document.pipeline_stage_status = PipelineStageStatus.QUEUED
+        await session.commit()
+
+        # Run pipeline from failed stage
+        results = await run_pipeline(
+            session=session,
+            org_id=org_id,
+            document_id=document_id,
+            correlation_id=correlation_id,
+            start_from_stage=failed_stage,
+        )
+
+        # Collect results
+        stage_results = []
+        for result in results:
+            stage_results.append({
+                "stage": result.stage.value,
+                "status": result.status.value,
+                "output": result.output,
+                "error": result.error,
+            })
+
+        # Check if all stages succeeded
+        all_succeeded = all(r.status in (PipelineStageStatus.SUCCEEDED, PipelineStageStatus.SKIPPED) for r in results)
+
+        return {
+            "status": "success" if all_succeeded else "failed",
+            "document_id": str(document_id),
+            "stages": stage_results,
+        }
+
+    except Exception:
+        # Update document status to failed
+        try:
+            doc_stmt = select(Document).where(Document.id == document_id)
+            doc_result = await session.execute(doc_stmt)
+            document = doc_result.scalar_one_or_none()
+            if document:
+                document.status = DocumentStatus.FAILED
+                await session.commit()
+        except Exception:
+            pass
+        raise
+    finally:
+        await session.close()
 
 
 @pipeline_task(job_type="embed_document_chunks", max_retries=2, retry_backoff=30)

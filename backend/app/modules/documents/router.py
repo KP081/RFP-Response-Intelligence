@@ -29,7 +29,7 @@ from app.modules.documents.schemas import (
     DocumentUploadResponse,
 )
 from app.modules.documents.service import DocumentsService
-from app.workers.tasks import extract_document_content
+from app.workers.tasks import run_ingestion_pipeline
 
 router = APIRouter(prefix="/orgs/{org_id}/documents", tags=["documents"])
 
@@ -106,9 +106,9 @@ async def upload_document(
         file_data=file_data,
     )
 
-    # Enqueue extraction task
-    correlation_id = f"extract-{document.id}"
-    extract_document_content.delay(
+    # Enqueue full ingestion pipeline
+    correlation_id = f"ingest-{document.id}"
+    run_ingestion_pipeline.delay(
         org_id=org_id,
         correlation_id=correlation_id,
         document_id=document.id,

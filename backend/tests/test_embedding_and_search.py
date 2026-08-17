@@ -7,12 +7,12 @@ import pytest
 import structlog
 
 from app.db.models import DocumentStatus
+from app.db.session import async_session_factory
+from app.llm.gateway import ModelGateway
 from app.modules.ingestion.chunking import create_chunks_from_blocks
 from app.modules.ingestion.embedding import embed_document_chunks
 from app.modules.ingestion.extraction import extract_pdf_content
 from app.modules.ingestion.search import hybrid_search
-from app.llm.gateway import ModelGateway
-from app.db.session import async_session_factory
 
 logger = structlog.get_logger(__name__)
 
@@ -27,7 +27,7 @@ async def test_full_pipeline_upload_extract_chunk_embed():
         pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
 
     # Create a test org and user
-    from app.db.models import Org, User, OrgMembership, Role, Document, DocumentVersion
+    from app.db.models import Document, DocumentVersion, Org, OrgMembership, Role, User
 
     session = async_session_factory()
 
@@ -165,7 +165,16 @@ async def test_hybrid_search_liquidated_damages():
 
     # This test assumes the full pipeline has been run and data exists
     # We'll run the full pipeline inline for this test
-    from app.db.models import Org, User, OrgMembership, Role, Document, DocumentVersion, Chunk, ChunkType
+    from app.db.models import (
+        Chunk,
+        ChunkType,
+        Document,
+        DocumentVersion,
+        Org,
+        OrgMembership,
+        Role,
+        User,
+    )
 
     session = async_session_factory()
 
@@ -280,7 +289,16 @@ async def test_hybrid_search_application_architect():
     if not FIXTURE_PATH.exists():
         pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
 
-    from app.db.models import Org, User, OrgMembership, Role, Document, DocumentVersion, Chunk, ChunkType
+    from app.db.models import (
+        Chunk,
+        ChunkType,
+        Document,
+        DocumentVersion,
+        Org,
+        OrgMembership,
+        Role,
+        User,
+    )
 
     session = async_session_factory()
 
@@ -391,7 +409,16 @@ async def test_hybrid_search_filter_by_document_id():
     if not FIXTURE_PATH.exists():
         pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
 
-    from app.db.models import Org, User, OrgMembership, Role, Document, DocumentVersion, Chunk, ChunkType
+    from app.db.models import (
+        Chunk,
+        ChunkType,
+        Document,
+        DocumentVersion,
+        Org,
+        OrgMembership,
+        Role,
+        User,
+    )
 
     session = async_session_factory()
 
@@ -605,7 +632,16 @@ async def test_embedding_cache_hit():
     if not FIXTURE_PATH.exists():
         pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
 
-    from app.db.models import Org, User, OrgMembership, Role, Document, DocumentVersion, Chunk, ChunkType
+    from app.db.models import (
+        Chunk,
+        ChunkType,
+        Document,
+        DocumentVersion,
+        Org,
+        OrgMembership,
+        Role,
+        User,
+    )
 
     session = async_session_factory()
 

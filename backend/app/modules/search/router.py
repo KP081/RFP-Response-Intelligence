@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import audited
 from app.db.session import get_db_session
 from app.llm.gateway import ModelGateway
-from app.modules.auth.dependencies import get_current_org_for_documents, get_current_user
-from app.modules.search.schemas import SearchRequest, SearchResponse, SearchResult
+from app.modules.auth.dependencies import get_current_org, get_current_user
 from app.modules.ingestion.search import hybrid_search
+from app.modules.search.schemas import SearchRequest, SearchResponse, SearchResult
 
 router = APIRouter(prefix="/orgs/{org_id}/search", tags=["search"])
 
@@ -39,7 +39,7 @@ async def search(
     org_id: uuid.UUID,
     request: Request,
     search_request: SearchRequest,
-    membership: Annotated[Any | None, Depends(get_current_org_for_documents)] = None,
+    membership: Annotated[Any | None, Depends(get_current_org)] = None,
     current_user: Annotated[Any | None, Depends(get_current_user)] = None,
     session: Annotated[AsyncSession | None, Depends(get_db_session)] = None,
 ) -> SearchResponse:

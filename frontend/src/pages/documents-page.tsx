@@ -12,6 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { uploadDocument, listDocuments, downloadDocument, deleteDocument, DocumentType, DocumentStatus, DocumentListResponse } from "@/api/documents";
 import { useAuth } from "@/context/AuthContext";
 import { formatFileSize, formatDate } from "@/lib/utils";
+import { PipelineProgress } from "@/components/PipelineProgress";
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   rfp: "RFP",
@@ -152,10 +153,18 @@ function DocumentList({ orgId }: { orgId: string }) {
   const queryClient = useQueryClient();
   const { currentOrg } = useAuth();
   const [filterType, setFilterType] = useState<DocumentType | "all">("all");
+  const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
 
   const { data: documents, isLoading, error } = useQuery({
     queryKey: ["documents", orgId, filterType],
     queryFn: () => listDocuments(orgId, filterType === "all" ? undefined : filterType),
+    refetchInterval: (query) => {
+      // Refetch every 5 seconds if any document is processing
+      const hasProcessing = query.state.data?.some(
+        (doc) => doc.status === "processing" || doc.status === "uploaded"
+      );
+      return hasProcessing ? 5000 : false;
+    },
   });
 
   const deleteMutation = useMutation({
@@ -181,6 +190,10 @@ function DocumentList({ orgId }: { orgId: string }) {
     if (confirm(`Are you sure you want to delete "${document.filename}"?`)) {
       deleteMutation.mutate(document.id);
     }
+  };
+
+  const toggleExpand = (documentId: string) => {
+    setExpandedDocId((prev) => (prev === documentId ? null : documentId));
   };
 
   if (isLoading) {
@@ -241,41 +254,69 @@ function DocumentList({ orgId }: { orgId: string }) {
               </TableHeader>
               <TableBody>
                 {documents.map((document) => (
-                  <TableRow key={document.id}>
-                    <TableCell className="font-medium">{document.filename}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{DOCUMENT_TYPE_LABELS[document.document_type]}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={STATUS_COLORS[document.status]}>
-                        {document.status.charAt(0).toUpperCase() + document.status.slice(1)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatFileSize(document.size_bytes)}</TableCell>
-                    <TableCell>{formatDate(document.created_at)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownload(document)}
-                        >
-                          Download
-                        </Button>
-                        {(currentOrg?.role === "admin" || currentOrg?.role === "proposal_manager") && (
+                  <>
+                    <TableRow
+                      key={document.id}
+                      className={expandedDocId === document.id ? "bg-slate-50" : ""}
+                      onClick={() => {
+                        if (document.status === "processing" || document.status === "uploaded") {
+                          toggleExpand(document.id);
+                        }
+                      }}
+                      style={{ cursor: document.status === "processing" || document.status === "uploaded" ? "pointer" : "default" }}
+                    >
+                      <TableCell className="font-medium">{document.filename}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{DOCUMENT_TYPE_LABELS[document.document_type]}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={STATUS_COLORS[document.status]}>
+                          {document.status.charAt(0).toUpperCase() + document.status.slice(1)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatFileSize(document.size_bytes)}</TableCell>
+                      <TableCell>{formatDate(document.created_at)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDelete(document)}
-                            disabled={deleteMutation.isPending}
-                            className="text-red-600 hover:bg-red-50"
+                            onClick={(e) => { e.stopPropagation(); handleDownload(document); }}
                           >
-                            Delete
+                            Download
                           </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                          {(currentOrg?.role === "admin" || currentOrg?.role === "proposal_manager") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(document); }}
+                              disabled={deleteMutation.isPending}
+                              className="text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {(expandedDocId === document.id) && (
+                      <TableRow key={`${document.id}-progress`}>
+                        <TableCell colSpan={6} className="p-0">
+                          <div className="border-t border-slate-200 bg-slate-50">
+                            <PipelineProgress
+                              orgId={orgId}
+                              documentId={document.id}
+                              onComplete={() => {
+                                setExpandedDocId(null);
+                                queryClient.invalidateQueries({ queryKey: ["documents", orgId] });
+                              }}
+                              onError={(error) => alert(error)}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 ))}
               </TableBody>
             </Table>

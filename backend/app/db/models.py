@@ -46,6 +46,27 @@ class DocumentStatus(str, Enum):
     FAILED = "failed"
 
 
+class PipelineStage(str, Enum):
+    """Enumeration of pipeline stages."""
+
+    EXTRACT = "extract"
+    CHUNK = "chunk"
+    EMBED = "embed"
+    OCR = "ocr"
+    CAPTION_FIGURES = "caption_figures"
+    DEDUPE = "dedupe"
+
+
+class PipelineStageStatus(str, Enum):
+    """Enumeration of pipeline stage statuses."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 class InviteStatus(str, Enum):
     """Enumeration of invite statuses."""
 
@@ -302,6 +323,12 @@ class Document(Base, TenantScopedMixin):
     )
     status: Mapped[DocumentStatus] = mapped_column(
         SQLEnum(DocumentStatus, native_enum=False), nullable=False, default=DocumentStatus.UPLOADED
+    )
+    pipeline_stage: Mapped[PipelineStage | None] = mapped_column(
+        SQLEnum(PipelineStage, native_enum=False), nullable=True
+    )
+    pipeline_stage_status: Mapped[PipelineStageStatus] = mapped_column(
+        SQLEnum(PipelineStageStatus, native_enum=False), nullable=False, default=PipelineStageStatus.QUEUED
     )
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
     size_bytes: Mapped[int] = mapped_column(nullable=False)

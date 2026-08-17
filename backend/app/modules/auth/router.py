@@ -3,6 +3,7 @@
 import secrets
 import uuid
 from datetime import datetime, timezone
+from collections.abc import Callable, AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -12,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.models import OrgMembership, Role, User
-from app.db.session import get_db_session
 from app.modules.auth.dependencies import (
     get_auth_service,
     get_current_user,
@@ -71,13 +71,19 @@ async def login(
     return RedirectResponse(url=authorization_url)
 
 
+def get_db_session_dependency() -> Callable[..., AsyncIterator[AsyncSession]]:
+    """Lazy dependency for database session to avoid circular imports."""
+    from app.db.session import get_db_session
+    return get_db_session
+
+
 @router.get("/callback")
 async def callback(
     request: Request,
     code: Annotated[str, Query()],
     state: Annotated[str, Query()],
     auth_service: AuthService = Depends(get_auth_service),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session_dependency),
 ) -> Response:
     """Handle OIDC callback, exchange code for tokens, and issue app tokens."""
     # Retrieve and validate PKCE state
@@ -175,7 +181,7 @@ async def refresh(
     request: Request,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session_dependency),
 ) -> TokenResponse:
     """Refresh the access token using the refresh token."""
     refresh_token = request.cookies.get("refresh_token")

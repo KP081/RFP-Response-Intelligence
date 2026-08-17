@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.session import engine
 from app.modules.auth import auth_router
 from app.modules.documents import documents_router
+from app.modules.ingestion import ingestion_router
 from app.modules.jobs import jobs_router
 from app.modules.orgs import orgs_router
 from app.modules.search import search_router
@@ -18,6 +19,7 @@ router = APIRouter()
 router.include_router(auth_router)
 router.include_router(orgs_router)
 router.include_router(documents_router)
+router.include_router(ingestion_router)
 router.include_router(jobs_router)
 router.include_router(search_router)
 
