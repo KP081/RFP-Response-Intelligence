@@ -31,3 +31,13 @@ take effect until you run:
 This drops and recreates only Keycloak's own database and forces a clean reimport — it does not
 affect application data. A full `docker compose down -v` also works but wipes everything,
 including your seeded orgs/users/documents.
+
+### Diagnosing Keycloak login issues
+
+If login fails with "Invalid username or password" despite correct credentials, run:
+
+    make diagnose-keycloak
+
+This checks whether Keycloak is pointed at the correct database, whether the `keycloak` database
+exists, whether the realm and user tables are populated, and whether the bootstrap admin exists —
+the exact checks from Phase 6 Step 1, in one command.

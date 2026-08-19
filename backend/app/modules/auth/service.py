@@ -67,7 +67,7 @@ class AuthService:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-        return f"{settings.oidc_issuer.rstrip('/')}/protocol/openid-connect/auth?{urlencode(params)}"
+        return f"{settings.oidc_authorization_endpoint.rstrip('/')}/protocol/openid-connect/auth?{urlencode(params)}"
 
     async def exchange_code_for_tokens(
         self, code: str, redirect_uri: str, code_verifier: str

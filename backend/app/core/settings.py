@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # OIDC Configuration
-    oidc_issuer: str = "http://localhost:8081/realms/rfp-response-intelligence"
+    oidc_issuer: str = "http://keycloak:8080/realms/rfp-response-intelligence"
+    oidc_authorization_endpoint: str = "http://localhost:8081/realms/rfp-response-intelligence"
     oidc_client_id: str = "rfp-response-intelligence-web"
     oidc_client_secret: str = "local-development-only"
     oidc_redirect_uri: str = "http://localhost:8000/api/v1/auth/callback"

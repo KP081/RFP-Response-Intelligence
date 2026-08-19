@@ -37,7 +37,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail http://localhost:8080/health/ready"]
+      test: ["CMD-SHELL", "timeout 2 bash -c 'cat < /dev/null > /dev/tcp/localhost/8080' 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -93,6 +93,8 @@ services:
       context: ../backend
     env_file:
       - .env
+    environment:
+      - OIDC_ISSUER=http://keycloak:8080/realms/rfp-response-intelligence
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
