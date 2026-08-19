@@ -19,3 +19,15 @@ This service uses **stateless JWT** authentication:
 This choice is documented here per Task 06's explicit requirement to "resolve early whether sessions are stateless JWT or server-side... Document whichever choice is made and why."
 
 Cross-reference: `app/modules/auth/dependencies.py`, `app/modules/auth/service.py`, `app/core/audit.py` (for RLS context setting).
+
+## Resetting Keycloak after editing realm-export.json
+
+Keycloak only imports `infra/keycloak/realm-export.json` when its realm doesn't already exist in
+its database. After the first `docker compose up`, further edits to that file will silently not
+take effect until you run:
+
+    make reset-keycloak
+
+This drops and recreates only Keycloak's own database and forces a clean reimport — it does not
+affect application data. A full `docker compose down -v` also works but wipes everything,
+including your seeded orgs/users/documents.

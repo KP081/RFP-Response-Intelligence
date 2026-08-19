@@ -1,6 +1,6 @@
 COMPOSE := docker compose --env-file infra/.env -f infra/docker-compose.yml
 
-.PHONY: up down logs test lint seed
+.PHONY: up down logs test lint seed reset-keycloak
 
 up:
 	$(COMPOSE) up --build --detach --wait
@@ -28,3 +28,9 @@ lint:
 	pnpm install --frozen-lockfile
 	pnpm --dir frontend lint
 	pnpm --dir frontend typecheck
+
+reset-keycloak:
+	$(COMPOSE) stop keycloak
+	$(COMPOSE) exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS keycloak;"
+	$(COMPOSE) exec -T postgres psql -U postgres -c "CREATE DATABASE keycloak;"
+	$(COMPOSE) up -d keycloak
