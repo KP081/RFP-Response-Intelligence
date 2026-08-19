@@ -149,7 +149,7 @@ export function createPipelineEventStream(
     }
   };
 
-  eventSource.onerror = (error) => {
+  eventSource.onerror = () => {
     if (onError) {
       onError(new Error("SSE connection error"));
     }

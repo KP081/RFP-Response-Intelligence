@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 
 import { searchDocuments, SearchRequest, SearchFilter, SearchResult, SearchResponse } from "@/api/search";
 import { useAuth } from "@/context/AuthContext";
-import { formatDate } from "@/lib/utils";
 
 const CHUNK_TYPE_LABELS: Record<string, string> = {
   text: "Text",
@@ -25,12 +24,11 @@ const CHUNK_TYPE_COLORS: Record<string, string> = {
   heading: "bg-purple-100 text-purple-800",
 };
 
-function SearchForm({ orgId, onSearch }: { orgId: string; onSearch: (request: SearchRequest) => void }) {
+function SearchForm({ onSearch, isSearching }: { onSearch: (request: SearchRequest) => void; isSearching: boolean }) {
   const [query, setQuery] = useState("");
   const [documentId, setDocumentId] = useState("");
   const [documentType, setDocumentType] = useState("");
   const [topK, setTopK] = useState(10);
-  const [isSearching, setIsSearching] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,7 +215,7 @@ export function SearchPage() {
       </div>
 
       <div className="space-y-6">
-        <SearchForm orgId={orgId} onSearch={handleSearch} />
+        <SearchForm onSearch={handleSearch} isSearching={isLoading} />
 
         {isLoading && (
           <Card>

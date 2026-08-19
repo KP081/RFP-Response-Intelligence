@@ -1,5 +1,6 @@
 """Integration tests for semantic chunking (Task 13)."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,14 @@ logger = structlog.get_logger(__name__)
 
 # Path to the test fixture
 FIXTURE_PATH = Path(__file__).parent.parent.parent / "plan" / "fixtures" / "RFP" / "tele-manas-rfp-sample.pdf"
+
+
+def _check_fixture() -> None:
+    """Check if fixture exists, fail in CI if missing, skip otherwise."""
+    if not FIXTURE_PATH.exists():
+        if os.environ.get("CI"):
+            pytest.fail(f"Required fixture missing in CI: {FIXTURE_PATH}")
+        pytest.skip(f"Fixture not found at {FIXTURE_PATH} (skipping outside CI)")
 
 
 @pytest.mark.integration
@@ -187,8 +196,7 @@ def test_chunking_large_table_split():
 @pytest.mark.integration
 def test_pdf_extraction_then_chunking_tele_manas_fixture():
     """Integration test: full chain upload → extract → chunk against Tele-MANAS fixture."""
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     with open(FIXTURE_PATH, "rb") as f:
         file_data = f.read()

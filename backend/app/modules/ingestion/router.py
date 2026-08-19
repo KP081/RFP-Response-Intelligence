@@ -1,9 +1,9 @@
 """Pipeline router for document ingestion pipeline status and events."""
 
 import asyncio
+import json
 import uuid
 from collections.abc import AsyncGenerator
-from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -75,7 +75,7 @@ async def stream_pipeline_events(
         from app.modules.ingestion.pipeline import get_pipeline_status as get_status
         initial_status = await get_status(db_session, document_id)
 
-        yield f"data: {initial_status}\n\n"
+        yield f"data: {json.dumps(initial_status, default=str)}\n\n"
 
         # Poll for changes
         while True:
@@ -93,14 +93,14 @@ async def stream_pipeline_events(
                     current_pipeline_status != last_status or
                     current_status.get("stages", {}).get(current_stage, {}).get("error") != last_error):
 
-                    yield f"data: {current_status}\n\n"
+                    yield f"data: {json.dumps(current_status, default=str)}\n\n"
                     last_stage = current_stage
                     last_status = current_pipeline_status
                     last_error = current_status.get("stages", {}).get(current_stage, {}).get("error")
 
                 # If pipeline is complete or failed, send final event and stop
                 if current_pipeline_status in ("ready", "failed"):
-                    yield f"data: {current_status}\n\n"
+                    yield f"data: {json.dumps(current_status, default=str)}\n\n"
                     break
 
             except Exception as e:

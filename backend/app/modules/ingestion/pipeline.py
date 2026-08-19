@@ -252,10 +252,10 @@ class EmbedStageHandler(StageHandler):
         version_id: uuid.UUID,
         correlation_id: str,
     ) -> dict[str, Any]:
-        from app.llm.gateway import ModelGateway
+        from app.llm.gateway import get_model_gateway
         from app.modules.ingestion.embedding import embed_document_chunks as embed_chunks_func
 
-        model_gateway = ModelGateway()
+        model_gateway = get_model_gateway()
 
         result = await embed_chunks_func(
             session=session,

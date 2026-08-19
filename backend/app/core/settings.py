@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response"
+    migrations_database_url: str | None = None
     redis_url: str | None = None
     s3_endpoint: str | None = None
     s3_bucket: str | None = None
@@ -39,6 +40,12 @@ class Settings(BaseSettings):
 
     # Frontend URL for invite links
     frontend_url: str = "http://localhost:5173"
+    # CORS allowed frontend origins (comma-separated string)
+    frontend_urls_str: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    @property
+    def frontend_urls(self) -> list[str]:
+        return [url.strip() for url in self.frontend_urls_str.split(",")]
 
     # LLM Provider Configuration
     llm_provider: str = "mock"

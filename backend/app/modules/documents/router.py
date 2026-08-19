@@ -8,6 +8,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audited
+from app.core.logging import CORRELATION_ID_HEADER
 from app.core.policy import can_export
 from app.db.models import DocumentType, User
 from app.db.session import get_db_session
@@ -29,9 +30,14 @@ from app.modules.documents.schemas import (
     DocumentUploadResponse,
 )
 from app.modules.documents.service import DocumentsService
-from app.workers.tasks import run_ingestion_pipeline
 
 router = APIRouter(prefix="/orgs/{org_id}/documents", tags=["documents"])
+
+
+def get_run_ingestion_pipeline() -> Any:
+    """Lazy dependency for run ingestion pipeline task to avoid circular imports."""
+    from app.workers.tasks import run_ingestion_pipeline
+    return run_ingestion_pipeline
 
 
 def upload_metadata_builder(response: DocumentUploadResponse) -> dict[str, Any]:
@@ -107,8 +113,8 @@ async def upload_document(
     )
 
     # Enqueue full ingestion pipeline
-    correlation_id = f"ingest-{document.id}"
-    run_ingestion_pipeline.delay(
+    correlation_id = request.headers.get(CORRELATION_ID_HEADER, f"ingest-{document.id}")
+    get_run_ingestion_pipeline().delay(
         org_id=org_id,
         correlation_id=correlation_id,
         document_id=document.id,
@@ -157,6 +163,11 @@ async def list_documents(
 
 
 @router.get("/{document_id}", response_model=DocumentDetailResponse)
+@audited(
+    action="document.view",
+    resource_type="document",
+    resource_id_param="document_id",
+)
 async def get_document_endpoint(
     org_id: uuid.UUID,
     document: Annotated[DocumentListResponse, Depends(get_document_dep)],
@@ -204,9 +215,9 @@ async def download_document(
     """
     from app.core.storage import get_object_store
 
-    # Get document (including deleted check)
+    # Get document (including deleted check) - scoped to org for defense-in-depth
     assert documents_service is not None
-    document = await documents_service.get_document(document_id)
+    document = await documents_service.get_document(document_id, org_id)
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -255,10 +266,10 @@ async def delete_document(
 
     The document is marked as deleted but not physically removed to preserve audit trail.
     """
-    # Get document first for metadata
+    # Get document first for metadata - scoped to org for defense-in-depth
     assert documents_service is not None
     assert current_user is not None
-    document = await documents_service.get_document_including_deleted(document_id)
+    document = await documents_service.get_document_including_deleted(document_id, org_id)
     if document and request:
         request.state.audit_metadata = {"filename": document.filename}
 

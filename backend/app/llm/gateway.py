@@ -22,6 +22,7 @@ import redis.asyncio as redis
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import get_redis_client
 from app.core.settings import settings
 from app.db.models import LLMCall, LLMCallStatus
 from app.db.session import async_session_factory
@@ -429,3 +430,11 @@ def build_messages(
         {"role": "user", "content": f"<document_content>\n{untrusted_document_content}\n</document_content>"},
         {"role": "user", "content": user_task},
     ]
+
+
+# Redis client and ModelGateway factory functions
+
+
+def get_model_gateway() -> ModelGateway:
+    """Return a ModelGateway wired to the real Redis cache."""
+    return ModelGateway(redis_client=get_redis_client())

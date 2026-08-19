@@ -2,8 +2,8 @@
 
 import secrets
 import uuid
+from collections.abc import AsyncIterator, Callable
 from datetime import datetime, timezone
-from collections.abc import Callable, AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import get_redis_client
 from app.core.settings import settings
 from app.db.models import OrgMembership, Role, User
 from app.modules.auth.dependencies import (
@@ -27,19 +28,24 @@ from app.modules.auth.service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-# In-memory PKCE state storage (in production, use Redis)
-_pkce_states: dict[str, PKCEState] = {}
+PKCE_STATE_TTL_SECONDS = 600
 
 
-def _cleanup_expired_pkce_states() -> None:
-    """Remove expired PKCE states (older than 10 minutes)."""
-    now = datetime.now(timezone.utc)
-    expired = [
-        state for state, data in _pkce_states.items()
-        if (now - data.state_created).total_seconds() > 600
-    ]
-    for state in expired:
-        del _pkce_states[state]
+async def _store_pkce_state(state: str, data: PKCEState) -> None:
+    """Store PKCE state in Redis with TTL."""
+    redis_client = get_redis_client()
+    await redis_client.set(f"pkce:{state}", data.model_dump_json(), ex=PKCE_STATE_TTL_SECONDS)
+
+
+async def _pop_pkce_state(state: str) -> PKCEState | None:
+    """Retrieve and remove PKCE state from Redis."""
+    redis_client = get_redis_client()
+    key = f"pkce:{state}"
+    raw = await redis_client.get(key)
+    if raw is None:
+        return None
+    await redis_client.delete(key)
+    return PKCEState.model_validate_json(raw)
 
 
 @router.get("/login")
@@ -49,18 +55,16 @@ async def login(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> RedirectResponse:
     """Initiate OIDC login flow with PKCE."""
-    _cleanup_expired_pkce_states()
-
     state = secrets.token_urlsafe(32)
     code_verifier, code_challenge = auth_service.generate_pkce_pair()
 
-    # Store PKCE state
-    _pkce_states[state] = PKCEState(
+    # Store PKCE state in Redis
+    await _store_pkce_state(state, PKCEState(
         code_verifier=code_verifier,
         state=state,
         redirect_uri=redirect_uri,
         state_created=datetime.now(timezone.utc),
-    )
+    ))
 
     authorization_url = auth_service.get_authorization_url(
         redirect_uri=redirect_uri,
@@ -86,8 +90,8 @@ async def callback(
     session: AsyncSession = Depends(get_db_session_dependency),
 ) -> Response:
     """Handle OIDC callback, exchange code for tokens, and issue app tokens."""
-    # Retrieve and validate PKCE state
-    pkce_state = _pkce_states.pop(state, None)
+    # Retrieve and validate PKCE state from Redis
+    pkce_state = await _pop_pkce_state(state)
     if pkce_state is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

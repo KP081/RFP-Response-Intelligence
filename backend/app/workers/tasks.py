@@ -8,7 +8,6 @@ from typing import Any, ParamSpec, TypeVar
 
 import structlog
 from celery import Task  # type: ignore[import-untyped]
-from celery.exceptions import MaxRetriesExceededError  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +24,7 @@ from app.db.models import (
     RawExtraction,
 )
 from app.db.session import async_session_factory
-from app.llm.gateway import ModelGateway
+from app.llm.gateway import get_model_gateway
 from app.modules.ingestion.chunking import create_chunks_from_blocks
 from app.modules.ingestion.embedding import embed_document_chunks as embed_chunks_func
 from app.modules.ingestion.extraction import (
@@ -119,7 +118,6 @@ def pipeline_task(
             bind=True,
             max_retries=max_retries,
             default_retry_delay=retry_backoff,
-            autoretry_for=(Exception,),
             retry_backoff=True,
             retry_backoff_max=600,
             retry_jitter=True,
@@ -160,37 +158,22 @@ def pipeline_task(
                     logger.info("job_succeeded", job_id=str(job_id), job_type=job_type)
                     return result
 
-                except MaxRetriesExceededError:
-                    await _update_job_status(
-                        session,
-                        job_id,
-                        JobStatus.FAILED,
-                        error_message="Max retries exceeded",
-                    )
-                    logger.error("job_failed_max_retries", job_id=str(job_id), job_type=job_type)
-                    raise
                 except Exception as e:
-                    try:
-                        self.retry(exc=e)
-                    except MaxRetriesExceededError:
+                    will_retry = self.request.retries < self.max_retries
+                    if will_retry:
                         await _update_job_status(
-                            session,
-                            job_id,
-                            JobStatus.FAILED,
-                            error_message=str(e)[:5000],
+                            session, job_id, JobStatus.RETRYING, error_message=str(e)[:5000]
                         )
-                        logger.error("job_failed", job_id=str(job_id), job_type=job_type, error=str(e))
-                        raise
-                    await _update_job_status(
-                        session,
-                        job_id,
-                        JobStatus.RETRYING,
-                        error_message=str(e)[:5000],
-                    )
-                    logger.warning("job_retrying", job_id=str(job_id), job_type=job_type, error=str(e))
-                    raise
-                finally:
+                        logger.warning("job_retrying", job_id=str(job_id), job_type=job_type, error=str(e))
+                    else:
+                        await _update_job_status(
+                            session, job_id, JobStatus.FAILED, error_message=str(e)[:5000]
+                        )
+                        logger.error("job_failed_max_retries", job_id=str(job_id), job_type=job_type)
                     await session.close()
+                    # self.retry() always raises (Retry, or MaxRetriesExceededError if exhausted)
+                    # nothing after this line executes.
+                    raise self.retry(exc=e)
 
             return asyncio.run(_run_task())
 
@@ -397,7 +380,7 @@ async def embed_document_chunks(
     from app.db.models import Document, DocumentVersion
 
     session = _get_db_session()
-    model_gateway = ModelGateway()
+    model_gateway = get_model_gateway()
 
     try:
         # Get document and version

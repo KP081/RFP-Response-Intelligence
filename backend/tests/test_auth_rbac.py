@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -16,7 +16,7 @@ from app.modules.auth.dependencies import (
     require_role,
     require_role_dependency,
 )
-from app.modules.auth.schemas import TokenPayload
+from app.modules.auth.schemas import PKCEState, TokenPayload
 from app.modules.auth.service import AuthService
 
 
@@ -537,3 +537,89 @@ class TestAuthRouterEndpoints:
         from app.modules.auth.router import router
         routes = [r.path for r in router.routes]
         assert "/auth/test-org-access/{org_id}" in routes
+
+
+class TestPKCERedisStorage:
+    """Tests for Redis-backed PKCE state storage (F12)."""
+
+    @pytest.fixture
+    def pkce_state(self):
+        return PKCEState(
+            code_verifier="test-verifier",
+            state="test-state",
+            redirect_uri="http://localhost:5173/auth/callback",
+            state_created=datetime.now(timezone.utc),
+        )
+
+    @pytest.fixture
+    def mock_redis(self):
+        redis_mock = AsyncMock()
+        redis_mock.set = AsyncMock()
+        redis_mock.get = AsyncMock()
+        redis_mock.delete = AsyncMock()
+        return redis_mock
+
+    @pytest.mark.asyncio
+    async def test_store_and_pop_pkce_state(self, pkce_state, mock_redis):
+        """Test storing and retrieving PKCE state from Redis."""
+        from app.modules.auth.router import _pop_pkce_state, _store_pkce_state
+        
+        with patch("app.modules.auth.router.get_redis_client", return_value=mock_redis):
+            # Use a unique state to avoid conflicts
+            state = f"test-state-{uuid.uuid4()}"
+            pkce_state.state = state
+            
+            # Store the state
+            await _store_pkce_state(state, pkce_state)
+            
+            # Verify Redis set was called
+            mock_redis.set.assert_called_once()
+            call_args = mock_redis.set.call_args
+            assert f"pkce:{state}" in call_args.args
+            
+            # Mock the get to return the stored state
+            mock_redis.get.return_value = pkce_state.model_dump_json()
+            
+            # Retrieve and remove the state
+            retrieved = await _pop_pkce_state(state)
+            
+            assert retrieved is not None
+            assert retrieved.code_verifier == pkce_state.code_verifier
+            assert retrieved.state == pkce_state.state
+            assert retrieved.redirect_uri == pkce_state.redirect_uri
+            
+            # Verify Redis get and delete were called
+            mock_redis.get.assert_called_once_with(f"pkce:{state}")
+            mock_redis.delete.assert_called_once_with(f"pkce:{state}")
+
+    @pytest.mark.asyncio
+    async def test_pop_nonexistent_pkce_state(self, mock_redis):
+        """Test popping a non-existent PKCE state returns None."""
+        from app.modules.auth.router import _pop_pkce_state
+        
+        with patch("app.modules.auth.router.get_redis_client", return_value=mock_redis):
+            mock_redis.get.return_value = None
+            
+            result = await _pop_pkce_state("nonexistent-state")
+            assert result is None
+            
+            mock_redis.get.assert_called_once_with("pkce:nonexistent-state")
+            mock_redis.delete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pkce_state_ttl_expiry(self, pkce_state, mock_redis):
+        """Test that PKCE state handles TTL expiry."""
+        from app.modules.auth.router import _pop_pkce_state
+        
+        with patch("app.modules.auth.router.get_redis_client", return_value=mock_redis):
+            state = f"test-ttl-{uuid.uuid4()}"
+            pkce_state.state = state
+            
+            # Simulate expired key (get returns None)
+            mock_redis.get.return_value = None
+            
+            result = await _pop_pkce_state(state)
+            assert result is None
+            
+            mock_redis.get.assert_called_once_with(f"pkce:{state}")
+            mock_redis.delete.assert_not_called()

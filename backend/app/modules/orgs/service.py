@@ -9,7 +9,8 @@ from pydantic import EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AuditLogEntry, InviteStatus, Org, OrgInvite, OrgMembership, Role, User
+from app.core.audit import record_audit_event
+from app.db.models import InviteStatus, Org, OrgInvite, OrgMembership, Role, User
 
 
 class OrgsService:
@@ -27,18 +28,16 @@ class OrgsService:
         resource_id: str,
         metadata: dict[str, object],
     ) -> None:
-        """Write an audit log entry."""
-        audit_entry = AuditLogEntry(
+        """Write an audit log entry via centralized audit function."""
+        await record_audit_event(
+            session=self.session,
             org_id=org_id,
             actor_user_id=actor_user_id,
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
-            event_metadata=metadata,
-            correlation_id=str(uuid.uuid4()),
+            metadata=metadata,
         )
-        self.session.add(audit_entry)
-        await self.session.flush()
 
     async def create_org(self, name: str, user_id: uuid.UUID) -> Org:
         """Create a new organization and make the creator an admin."""

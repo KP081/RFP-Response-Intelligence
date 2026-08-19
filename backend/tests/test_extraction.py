@@ -1,5 +1,6 @@
 """Integration tests for text and table extraction (Task 12)."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,14 @@ logger = structlog.get_logger(__name__)
 FIXTURE_PATH = Path(__file__).parent.parent.parent / "plan" / "fixtures" / "RFP" / "tele-manas-rfp-sample.pdf"
 
 
+def _check_fixture() -> None:
+    """Check if fixture exists, fail in CI if missing, skip otherwise."""
+    if not FIXTURE_PATH.exists():
+        if os.environ.get("CI"):
+            pytest.fail(f"Required fixture missing in CI: {FIXTURE_PATH}")
+        pytest.skip(f"Fixture not found at {FIXTURE_PATH} (skipping outside CI)")
+
+
 @pytest.mark.integration
 def test_pdf_extraction_tele_manas_fixture():
     """Test PDF extraction against the Tele-MANAS RFP fixture.
@@ -27,8 +36,7 @@ def test_pdf_extraction_tele_manas_fixture():
     3. Tables are detected (Eligibility Criteria, Rate Card)
     4. Tables have correct row/column counts
     """
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     with open(FIXTURE_PATH, "rb") as f:
         file_data = f.read()
@@ -172,8 +180,7 @@ def test_header_footer_stripper_preserves_unique_blocks():
 @pytest.mark.integration
 def test_pdf_extraction_no_ocr_needed():
     """Verify the fixture is a text-based PDF (not scanned) so OCR is not needed."""
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     with open(FIXTURE_PATH, "rb") as f:
         file_data = f.read()

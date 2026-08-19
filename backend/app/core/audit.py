@@ -1,7 +1,7 @@
 """Audit logging core utilities."""
 
 import uuid
-from collections.abc import Callable, AsyncIterator, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine
 from functools import wraps
 from typing import Annotated, Any, Optional, TypeVar
 
@@ -177,7 +177,7 @@ async def get_audit_session(
 
     from sqlalchemy import text
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 

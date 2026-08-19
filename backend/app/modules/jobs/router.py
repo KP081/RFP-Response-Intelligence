@@ -43,7 +43,10 @@ async def create_ping_job(
     )
 
     async with async_session_factory() as db_session:
-        await db_session.execute(text("SET LOCAL app.current_org_id = :org_id"), {"org_id": str(org_id)})
+        await db_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
         stmt = select(PipelineJob).where(PipelineJob.correlation_id == correlation_id)
         result = await db_session.execute(stmt)
         job = result.scalar_one_or_none()

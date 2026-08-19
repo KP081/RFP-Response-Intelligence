@@ -335,3 +335,92 @@ class TestPipelineTaskDecorator:
         assert mock_session_factory.commit.called
         assert job.status == JobStatus.RETRYING
         assert job.error_message == "Transient error"
+
+
+class TestPipelineTaskRetryLogic:
+    """Tests for the pipeline_task retry logic (F11)."""
+
+    @pytest.fixture
+    def org_id(self):
+        return uuid.uuid4()
+
+    @pytest.fixture
+    def correlation_id(self):
+        return "test-correlation-retry"
+
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        session.commit = AsyncMock()
+        
+        async def mock_refresh(job_obj):
+            if job_obj.id is None:
+                job_obj.id = uuid.uuid4()
+        session.refresh = AsyncMock(side_effect=mock_refresh)
+        session.close = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def mock_session_factory(self, mock_session):
+        with patch("app.workers.tasks.async_session_factory", return_value=mock_session):
+            yield mock_session
+
+    @pytest.mark.asyncio
+    async def test_pipeline_task_retrying_status_transitions(
+        self, org_id, correlation_id, mock_session_factory, mock_session
+    ):
+        """Test that pipeline_jobs status transitions through QUEUED -> RUNNING -> RETRYING -> ... -> FAILED."""
+
+        from app.workers.tasks import _update_job_status
+        
+        # Test the status update sequence directly
+        job = PipelineJob(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            job_type="test_retry",
+            status=JobStatus.QUEUED,
+            correlation_id=correlation_id,
+            document_id=None,
+        )
+        
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = job
+        mock_session_factory.execute.return_value = mock_result
+        
+        # Initial status is QUEUED (set by _create_pipeline_job)
+        assert job.status == JobStatus.QUEUED
+        
+        # Update to RUNNING
+        await _update_job_status(mock_session_factory, job.id, JobStatus.RUNNING, current_stage="test", progress_pct=10)
+        assert job.status == JobStatus.RUNNING
+        
+        # First retry - should go to RETRYING
+        await _update_job_status(mock_session_factory, job.id, JobStatus.RETRYING, error_message="Error 1")
+        assert job.status == JobStatus.RETRYING
+        assert job.error_message == "Error 1"
+        
+        # Second retry - stays RETRYING
+        await _update_job_status(mock_session_factory, job.id, JobStatus.RETRYING, error_message="Error 2")
+        assert job.status == JobStatus.RETRYING
+        assert job.error_message == "Error 2"
+        
+        # After max retries exhausted - goes to FAILED
+        await _update_job_status(mock_session_factory, job.id, JobStatus.FAILED, error_message="Max retries exceeded")
+        assert job.status == JobStatus.FAILED
+        assert job.error_message == "Max retries exceeded"
+    
+    @pytest.mark.asyncio
+    async def test_pipeline_task_decorator_removes_autoretry_for(
+        self, org_id, correlation_id, mock_session_factory, mock_session
+    ):
+        """Verify the pipeline_task decorator no longer uses autoretry_for."""
+        import inspect
+
+        # Get the decorator function and check its celery_app.task call
+        # This is a white-box test to ensure autoretry_for is not in the task options
+        # We can't easily inspect the decorated function's celery options, but we can
+        # verify the source code doesn't contain autoretry_for
+        import app.workers.tasks as tasks_module
+        source = inspect.getsource(tasks_module.pipeline_task)
+        assert "autoretry_for" not in source, "pipeline_task should not use autoretry_for"

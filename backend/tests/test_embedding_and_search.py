@@ -1,5 +1,6 @@
 """Integration tests for embedding and hybrid search (Task 14)."""
 
+import os
 import uuid
 from pathlib import Path
 
@@ -20,11 +21,18 @@ logger = structlog.get_logger(__name__)
 FIXTURE_PATH = Path(__file__).parent.parent.parent / "plan" / "fixtures" / "RFP" / "tele-manas-rfp-sample.pdf"
 
 
+def _check_fixture() -> None:
+    """Check if fixture exists, fail in CI if missing, skip otherwise."""
+    if not FIXTURE_PATH.exists():
+        if os.environ.get("CI"):
+            pytest.fail(f"Required fixture missing in CI: {FIXTURE_PATH}")
+        pytest.skip(f"Fixture not found at {FIXTURE_PATH} (skipping outside CI)")
+
+
 @pytest.mark.integration
 async def test_full_pipeline_upload_extract_chunk_embed():
     """Integration test: full chain upload → extract → chunk → embed against Tele-MANAS fixture."""
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     # Create a test org and user
     from app.db.models import Document, DocumentVersion, Org, OrgMembership, Role, User
@@ -160,8 +168,7 @@ async def test_full_pipeline_upload_extract_chunk_embed():
 @pytest.mark.integration
 async def test_hybrid_search_liquidated_damages():
     """Test that searching for 'liquidated damages' surfaces Section 8.19 chunk in top 3."""
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     # This test assumes the full pipeline has been run and data exists
     # We'll run the full pipeline inline for this test
@@ -286,8 +293,7 @@ async def test_hybrid_search_liquidated_damages():
 @pytest.mark.integration
 async def test_hybrid_search_application_architect():
     """Test that searching for 'Application Architect hourly rate' surfaces rate card table chunk in top 3."""
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     from app.db.models import (
         Chunk,
@@ -406,8 +412,7 @@ async def test_hybrid_search_application_architect():
 @pytest.mark.integration
 async def test_hybrid_search_filter_by_document_id():
     """Test that filtering by document_id correctly restricts results to that document only."""
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     from app.db.models import (
         Chunk,
@@ -629,8 +634,7 @@ async def test_reciprocal_rank_fusion():
 @pytest.mark.integration
 async def test_embedding_cache_hit():
     """Test that re-embedding unchanged chunks hits cache."""
-    if not FIXTURE_PATH.exists():
-        pytest.skip(f"Fixture not found at {FIXTURE_PATH}")
+    _check_fixture()
 
     from app.db.models import (
         Chunk,

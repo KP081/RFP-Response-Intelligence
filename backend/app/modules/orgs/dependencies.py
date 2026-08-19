@@ -42,7 +42,7 @@ async def get_current_org(
 
     # Set the RLS context variable for this session
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 
@@ -74,7 +74,7 @@ async def require_org_admin(
 
     # Set the RLS context variable for this session
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 
@@ -100,7 +100,7 @@ async def require_org_member(
 
     # Set the RLS context variable for this session
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 

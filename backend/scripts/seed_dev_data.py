@@ -7,6 +7,7 @@ Safe to re-run multiple times.
 import asyncio
 import uuid
 
+import structlog
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.sql import select
 
@@ -17,8 +18,18 @@ from app.db.models import Org, OrgMembership, Role, User
 async def seed_dev_data() -> None:
     """Seed development database with demo org and admin user."""
 
+    logger = structlog.get_logger(__name__)
+
+    # Use migrations database URL (superuser) to bypass RLS for seeding
+    migrations_url = settings.migrations_database_url or settings.database_url
+    if settings.migrations_database_url is None:
+        logger.warning(
+            "MIGRATIONS_DATABASE_URL not set, falling back to DATABASE_URL. "
+            "This will fail once RLS is enforced unless the superuser is used."
+        )
+
     # Create async engine and session factory
-    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    engine = create_async_engine(migrations_url, pool_pre_ping=True)
     async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async with async_session_factory() as session:

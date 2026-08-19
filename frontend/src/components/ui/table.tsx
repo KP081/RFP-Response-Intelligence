@@ -52,10 +52,12 @@ export function TableHead({ className, ...props }: TableHeadProps) {
   );
 }
 
-export type TableCellProps = HTMLAttributes<HTMLTableCellElement>;
+export type TableCellProps = HTMLAttributes<HTMLTableCellElement> & {
+  colSpan?: number;
+};
 
-export function TableCell({ className, ...props }: TableCellProps) {
+export function TableCell({ className, colSpan, ...props }: TableCellProps) {
   return (
-    <td className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />
+    <td colSpan={colSpan} className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />
   );
 }

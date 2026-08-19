@@ -76,15 +76,22 @@ class DocumentsService:
 
         return document
 
-    async def get_document(self, document_id: uuid.UUID) -> Optional[Document]:
-        """Get a document by ID."""
-        stmt = select(Document).where(Document.id == document_id, Document.is_deleted.is_(False))
+    async def get_document(self, document_id: uuid.UUID, org_id: uuid.UUID) -> Optional[Document]:
+        """Get a document by ID, scoped to the given org (defense-in-depth alongside RLS)."""
+        stmt = select(Document).where(
+            Document.id == document_id,
+            Document.org_id == org_id,
+            Document.is_deleted.is_(False),
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_document_including_deleted(self, document_id: uuid.UUID) -> Optional[Document]:
-        """Get a document by ID including deleted ones (for delete operation)."""
-        stmt = select(Document).where(Document.id == document_id)
+    async def get_document_including_deleted(self, document_id: uuid.UUID, org_id: uuid.UUID) -> Optional[Document]:
+        """Get a document by ID including deleted ones (for delete operation), scoped to org."""
+        stmt = select(Document).where(
+            Document.id == document_id,
+            Document.org_id == org_id,
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -103,16 +110,22 @@ class DocumentsService:
 
     async def get_presigned_download_url(self, document_id: uuid.UUID, expires_in: int = 3600) -> Optional[str]:
         """Get a presigned URL for downloading a document."""
-        document = await self.get_document(document_id)
+        # First get the document without org filter to find its org_id
+        stmt = select(Document).where(Document.id == document_id, Document.is_deleted.is_(False))
+        db_result = await self.session.execute(stmt)
+        document = db_result.scalar_one_or_none()
         if not document:
             return None
 
-        result = await self._object_store.get_presigned_url(document.storage_key, expires_in)
-        return result.url
+        presigned_result = await self._object_store.get_presigned_url(document.storage_key, expires_in)
+        return presigned_result.url
 
     async def soft_delete_document(self, document_id: uuid.UUID, actor_user_id: uuid.UUID) -> bool:
         """Soft delete a document by setting is_deleted flag."""
-        document = await self.get_document_including_deleted(document_id)
+        # First get the document without org filter to find its org_id
+        stmt = select(Document).where(Document.id == document_id)
+        result = await self.session.execute(stmt)
+        document = result.scalar_one_or_none()
         if not document:
             return False
 

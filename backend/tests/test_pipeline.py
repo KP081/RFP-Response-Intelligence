@@ -153,9 +153,9 @@ class TestPipelineOrchestrator:
             return [{"type": "text", "page": 1, "content": "Test content", "bbox": [0, 0, 100, 100]}]
 
         # Mock model_gateway.embed
-        with patch("app.llm.gateway.ModelGateway") as mock_gateway_class:
+        with patch("app.llm.gateway.get_model_gateway") as mock_get_gateway:
             mock_gateway = AsyncMock()
-            mock_gateway_class.return_value = mock_gateway
+            mock_get_gateway.return_value = mock_gateway
             mock_gateway.embed.return_value = [[0.1] * 1536]
 
             # Mock extractors
@@ -247,9 +247,9 @@ class TestPipelineOrchestrator:
             chunk_result,  # embed is_complete - NOT EXISTS
         ]
 
-        with patch("app.llm.gateway.ModelGateway") as mock_gateway_class:
+        with patch("app.llm.gateway.get_model_gateway") as mock_get_gateway:
             mock_gateway = AsyncMock()
-            mock_gateway_class.return_value = mock_gateway
+            mock_get_gateway.return_value = mock_gateway
             mock_gateway.embed.return_value = [[0.1] * 1536]
 
             with patch("app.modules.ingestion.chunking.create_chunks_from_blocks") as mock_chunk:
@@ -379,9 +379,9 @@ class TestPipelineOrchestrator:
 
         mock_session.execute.side_effect = execute_side_effect
 
-        with patch("app.llm.gateway.ModelGateway") as mock_gateway_class:
+        with patch("app.llm.gateway.get_model_gateway") as mock_get_gateway:
             mock_gateway = AsyncMock()
-            mock_gateway_class.return_value = mock_gateway
+            mock_get_gateway.return_value = mock_gateway
             mock_gateway.embed.side_effect = Exception("Embedding API failed")
 
             results = await run_pipeline(
@@ -486,9 +486,9 @@ class TestPipelineOrchestrator:
 
         mock_session.execute.side_effect = execute_side_effect
 
-        with patch("app.llm.gateway.ModelGateway") as mock_gateway_class:
+        with patch("app.llm.gateway.get_model_gateway") as mock_get_gateway:
             mock_gateway = AsyncMock()
-            mock_gateway_class.return_value = mock_gateway
+            mock_get_gateway.return_value = mock_gateway
             mock_gateway.embed.return_value = [[0.1] * 1536]
 
             results = await run_pipeline(

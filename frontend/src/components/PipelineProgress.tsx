@@ -73,7 +73,7 @@ export function PipelineProgress({
   const [isConnected, setIsConnected] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleMessage = useCallback((data: PipelineStatusResponse) => {
     setStatus(data);
@@ -185,10 +185,6 @@ export function PipelineProgress({
           {STAGE_ORDER.map((stage) => {
             const stageInfo = status.stages[stage];
             const isCurrentStage = stage === currentStage;
-            const isPastStage =
-              stageInfo?.status === "succeeded" ||
-              stageInfo?.status === "skipped";
-
             const stageStatus: PipelineStageStatus = stageInfo?.status || "queued";
 
             return (
@@ -227,7 +223,7 @@ export function PipelineProgress({
           <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-800 font-medium">Pipeline Failed</p>
             <p className="text-sm text-red-700 mt-1">
-              Failed at stage: <strong>{current_stage || "unknown"}</strong>
+              Failed at stage: <strong>{currentStage || "unknown"}</strong>
             </p>
             <Button
               variant="outline"

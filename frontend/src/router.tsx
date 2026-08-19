@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 
+import { AuthWrapper } from "@/components/AuthWrapper";
 import { AppLayout } from "@/components/app-layout";
 import { HomePage } from "@/pages/home-page";
 import { LoginPage } from "@/pages/login-page";
@@ -14,17 +15,22 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export const router = createBrowserRouter([
   {
-    element: <AppLayout />,
+    element: <AuthWrapper />,
     children: [
-      { index: true, element: <ProtectedRoute><HomePage /></ProtectedRoute> },
-      { path: "login", element: <LoginPage /> },
-      { path: "auth/callback", element: <AuthCallback /> },
-      { path: "invites/:token", element: <InviteAcceptPage /> },
-      { path: "orgs/:orgId", element: <ProtectedRoute><OrganizationPage /></ProtectedRoute> },
-      { path: "orgs/:orgId/settings", element: <ProtectedRoute><OrgSettingsPage /></ProtectedRoute> },
-      { path: "orgs/:orgId/documents", element: <ProtectedRoute><DocumentsPage /></ProtectedRoute> },
-      { path: "orgs/:orgId/search", element: <ProtectedRoute><SearchPage /></ProtectedRoute> },
-      { path: "orgs/:orgId/audit-log", element: <ProtectedRoute><AuditLogPage /></ProtectedRoute> },
+      {
+        element: <AppLayout />,
+        children: [
+          { index: true, element: <ProtectedRoute><HomePage /></ProtectedRoute> },
+          { path: "login", element: <LoginPage /> },
+          { path: "auth/callback", element: <AuthCallback /> },
+          { path: "invites/:token", element: <InviteAcceptPage /> },
+          { path: "orgs/:orgId", element: <ProtectedRoute><OrganizationPage /></ProtectedRoute> },
+          { path: "orgs/:orgId/settings", element: <ProtectedRoute><OrgSettingsPage /></ProtectedRoute> },
+          { path: "orgs/:orgId/documents", element: <ProtectedRoute><DocumentsPage /></ProtectedRoute> },
+          { path: "orgs/:orgId/search", element: <ProtectedRoute><SearchPage /></ProtectedRoute> },
+          { path: "orgs/:orgId/audit-log", element: <ProtectedRoute><AuditLogPage /></ProtectedRoute> },
+        ],
+      },
     ],
   },
 ]);

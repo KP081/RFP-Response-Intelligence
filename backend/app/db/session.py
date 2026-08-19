@@ -33,9 +33,11 @@ async def get_db_session_with_org_id(org_id: uuid.UUID) -> AsyncIterator[AsyncSe
     """
 
     async with async_session_factory() as session:
-        # SET LOCAL must run inside the current transaction. Because SQLAlchemy
-        # opens one implicitly for the first statement, we use a parameterized
-        # statement to avoid quoting issues and keep this safe for UUID values.
-        await session.execute(text("SET LOCAL app.current_org_id = :org_id"), {"org_id": str(org_id)})
+        # set_config() accepts bind parameters (unlike SET LOCAL) and with
+        # is_local=true it reproduces SET LOCAL's transaction-scoped behavior.
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
         yield session
 

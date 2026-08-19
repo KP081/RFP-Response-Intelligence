@@ -41,7 +41,7 @@ async def get_current_org_for_documents(
 
     # Set the RLS context variable for this session
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 
@@ -74,7 +74,7 @@ async def require_document_delete_role(
 
     # Set the RLS context variable for this session
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 
@@ -87,7 +87,7 @@ async def get_document(
     documents_service: Annotated[DocumentsService, Depends(get_documents_service)],
 ) -> Document:
     """Get a document by ID, ensuring it belongs to the current org."""
-    document = await documents_service.get_document(document_id)
+    document = await documents_service.get_document(document_id, membership.org_id)
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

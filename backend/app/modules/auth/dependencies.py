@@ -1,13 +1,13 @@
 """FastAPI dependencies for authentication and authorization."""
 
 import uuid
-from collections.abc import Awaitable, Callable, AsyncIterator
-from typing import Annotated
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Annotated, TypeVar
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import OrgMembership, Role, User
 from app.modules.auth.schemas import TokenPayload
@@ -15,11 +15,20 @@ from app.modules.auth.service import AuthService
 
 security = HTTPBearer(auto_error=False)
 
+_SessionFactory = TypeVar("_SessionFactory", bound=async_sessionmaker[AsyncSession])
 
-def get_db_session_dependency() -> Callable[..., AsyncIterator[AsyncSession]]:
-    """Lazy dependency for database session to avoid circular imports."""
-    from app.db.session import get_db_session
-    return get_db_session
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Lazy function to get session factory to avoid circular imports."""
+    from app.db.session import async_session_factory
+    return async_session_factory
+
+
+async def get_db_session_dependency() -> AsyncIterator[AsyncSession]:
+    """Database session dependency using global session factory."""
+    factory = get_session_factory()
+    async with factory() as session:
+        yield session
 
 
 async def get_auth_service(
@@ -34,8 +43,21 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
-    """Validate the JWT access token and return the current user."""
-    if credentials is None:
+    """Validate the JWT access token and return the current user.
+
+    Accepts the token via the Authorization header (Bearer) or the httpOnly `access_token`
+    cookie set by /auth/callback — the frontend relies on the cookie exclusively.
+    """
+    token: str | None = None
+    if credentials is not None:
+        token = credentials.credentials
+    else:
+        # Safely get cookies dict (may be missing or mocked in tests)
+        cookies = getattr(request, "cookies", None)
+        if isinstance(cookies, dict):
+            token = cookies.get("access_token")
+
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -43,7 +65,7 @@ async def get_current_user(
         )
 
     try:
-        token_payload: TokenPayload = auth_service.decode_token(credentials.credentials)
+        token_payload: TokenPayload = auth_service.decode_token(token)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -94,7 +116,7 @@ async def get_current_org(
 
     # Set the RLS context variable for this session
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 
@@ -127,7 +149,7 @@ async def require_role_dependency(
 
     # Set the RLS context variable for this session
     await session.execute(
-        text("SET LOCAL app.current_org_id = :org_id"),
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
         {"org_id": str(org_id)},
     )
 

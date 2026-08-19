@@ -23,9 +23,8 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
 
-    # Create chunk_type enum
-    chunk_type_enum = postgresql.ENUM("text", "table", "heading", name="chunk_type_enum", create_type=True)
-    chunk_type_enum.create(op.get_bind(), checkfirst=True)
+    # Create chunk_type enum using raw SQL to avoid SQLAlchemy enum event listener issues
+    op.execute("CREATE TYPE chunk_type_enum AS ENUM ('text', 'table', 'heading')")
 
     # Create chunks table (RLS-scoped)
     op.create_table(
@@ -36,7 +35,7 @@ def upgrade() -> None:
         sa.Column("version_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("chunk_index", sa.Integer(), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("chunk_type", chunk_type_enum, nullable=False),
+        sa.Column("chunk_type", postgresql.ENUM("text", "table", "heading", name="chunk_type_enum", create_type=False), nullable=False),
         sa.Column("page_start", sa.Integer(), nullable=False),
         sa.Column("page_end", sa.Integer(), nullable=False),
         sa.Column("section_path", sa.Text(), nullable=True),
@@ -66,5 +65,4 @@ def downgrade() -> None:
     op.drop_table("chunks")
 
     # Drop enum type
-    chunk_type_enum = postgresql.ENUM("text", "table", "heading", name="chunk_type_enum")
-    chunk_type_enum.drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS chunk_type_enum")

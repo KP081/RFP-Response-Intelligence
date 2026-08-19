@@ -4,22 +4,12 @@ These tests verify that:
 1. Tables with RLS policies correctly filter data by org_id
 2. Querying with the wrong org_id returns no results from other orgs
 3. RLS is enforced with FORCE ROW LEVEL SECURITY to prevent owner bypass
-
-NOTE ON TESTING RLS WITH SUPERUSER:
-PostgreSQL's RLS policies do NOT apply to superuser connections by design.
-This test suite uses the default superuser (postgres) connection. Therefore:
-- test_rls_table_status: PASSES - verifies RLS policies exist
-- test_feature_flags_helper: PASSES - tests the helper function, not RLS filtering
-- RLS Isolation Tests: SKIPPED - RLS filtering behavior cannot be tested with superuser
-  
-RLS filtering has been verified to work correctly using non-superuser connections.
-See conftest.py for details on the RLS test configuration.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.feature_flags import is_feature_enabled
@@ -141,46 +131,144 @@ class TestRLSEnforcement:
         assert len(policies) == 3, "Each tenant-scoped table should have one RLS policy"
 
     async def test_org_memberships_rls_isolation(
-        self, async_session: AsyncSession, two_orgs_setup: dict
+        self, async_session: AsyncSession, app_user_session: AsyncSession, two_orgs_setup: dict
     ) -> None:
-        """Test that org_memberships table correctly isolates data by org_id via RLS.
-
-        NOTE: This test is skipped because it runs with a superuser connection,
-        and RLS policies do not apply to superuser connections by PostgreSQL design.
-        RLS filtering has been verified to work correctly with non-superuser roles.
-        """
-        pytest.skip("RLS filtering cannot be tested with superuser connection. "
-                   "Verified working with non-superuser via manual testing.")
+        """Test that org_memberships table correctly isolates data by org_id via RLS."""
+        org_a_id = two_orgs_setup["org_a_id"]
+        await app_user_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_a_id)},
+        )
+        result = await app_user_session.execute(select(OrgMembership))
+        rows = result.scalars().all()
+        assert all(m.org_id == org_a_id for m in rows)
+        assert len(rows) == 1
 
     async def test_org_memberships_with_different_org_contexts(
-        self, async_session: AsyncSession, two_orgs_setup: dict
+        self, async_session: AsyncSession, app_user_session: AsyncSession, two_orgs_setup: dict
     ) -> None:
-        """Test querying org_memberships with different org_id contexts shows isolation.
-        
-        NOTE: This test is skipped because it runs with a superuser connection,
-        and RLS policies do not apply to superuser connections by PostgreSQL design.
-        """
-        pytest.skip("RLS filtering cannot be tested with superuser connection.")
+        """Test querying org_memberships with different org_id contexts shows isolation."""
+        org_a_id = two_orgs_setup["org_a_id"]
+        org_b_id = two_orgs_setup["org_b_id"]
+
+        # Context set to org A
+        await app_user_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_a_id)},
+        )
+        result = await app_user_session.execute(select(OrgMembership))
+        rows = result.scalars().all()
+        assert all(m.org_id == org_a_id for m in rows)
+        assert len(rows) == 1
+
+        # Context set to org B
+        await app_user_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_b_id)},
+        )
+        result = await app_user_session.execute(select(OrgMembership))
+        rows = result.scalars().all()
+        assert all(m.org_id == org_b_id for m in rows)
+        assert len(rows) == 1
 
     async def test_audit_log_rls_isolation(
-        self, async_session: AsyncSession, two_orgs_setup: dict
+        self, async_session: AsyncSession, app_user_session: AsyncSession, two_orgs_setup: dict
     ) -> None:
-        """Test that audit_log table correctly isolates data by org_id via RLS.
-        
-        NOTE: This test is skipped because it runs with a superuser connection,
-        and RLS policies do not apply to superuser connections by PostgreSQL design.
-        """
-        pytest.skip("RLS filtering cannot be tested with superuser connection.")
+        """Test that audit_log table correctly isolates data by org_id via RLS."""
+        from app.db.models import AuditLogEntry
+        org_a_id = two_orgs_setup["org_a_id"]
+        org_b_id = two_orgs_setup["org_b_id"]
+
+        # Seed audit log entries for both orgs using superuser
+        entry_a = AuditLogEntry(
+            id=uuid.uuid4(),
+            org_id=org_a_id,
+            actor_user_id=two_orgs_setup["user_a_id"],
+            action="test.action",
+            resource_type="test",
+            resource_id="1",
+            event_metadata={},
+            correlation_id=str(uuid.uuid4()),
+        )
+        entry_b = AuditLogEntry(
+            id=uuid.uuid4(),
+            org_id=org_b_id,
+            actor_user_id=two_orgs_setup["user_b_id"],
+            action="test.action",
+            resource_type="test",
+            resource_id="2",
+            event_metadata={},
+            correlation_id=str(uuid.uuid4()),
+        )
+        async_session.add(entry_a)
+        async_session.add(entry_b)
+        await async_session.commit()
+
+        # Context set to org A
+        await app_user_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_a_id)},
+        )
+        result = await app_user_session.execute(select(AuditLogEntry))
+        rows = result.scalars().all()
+        assert all(e.org_id == org_a_id for e in rows)
+        assert len(rows) == 1
+
+        # Context set to org B
+        await app_user_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_b_id)},
+        )
+        result = await app_user_session.execute(select(AuditLogEntry))
+        rows = result.scalars().all()
+        assert all(e.org_id == org_b_id for e in rows)
+        assert len(rows) == 1
 
     async def test_feature_flags_rls_isolation(
-        self, async_session: AsyncSession, two_orgs_setup: dict
+        self, async_session: AsyncSession, app_user_session: AsyncSession, two_orgs_setup: dict
     ) -> None:
-        """Test that feature_flags table correctly isolates data by org_id via RLS.
-        
-        NOTE: This test is skipped because it runs with a superuser connection,
-        and RLS policies do not apply to superuser connections by PostgreSQL design.
-        """
-        pytest.skip("RLS filtering cannot be tested with superuser connection.")
+        """Test that feature_flags table correctly isolates data by org_id via RLS."""
+        org_a_id = two_orgs_setup["org_a_id"]
+        org_b_id = two_orgs_setup["org_b_id"]
+
+        # Seed feature flags for both orgs using superuser
+        flag_a = FeatureFlag(
+            id=uuid.uuid4(),
+            org_id=org_a_id,
+            flag_name="test_flag",
+            enabled=True,
+        )
+        flag_b = FeatureFlag(
+            id=uuid.uuid4(),
+            org_id=org_b_id,
+            flag_name="test_flag",
+            enabled=False,
+        )
+        async_session.add(flag_a)
+        async_session.add(flag_b)
+        await async_session.commit()
+
+        # Context set to org A
+        await app_user_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_a_id)},
+        )
+        result = await app_user_session.execute(select(FeatureFlag))
+        rows = result.scalars().all()
+        assert all(f.org_id == org_a_id for f in rows)
+        assert len(rows) == 1
+        assert rows[0].enabled is True
+
+        # Context set to org B
+        await app_user_session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_b_id)},
+        )
+        result = await app_user_session.execute(select(FeatureFlag))
+        rows = result.scalars().all()
+        assert all(f.org_id == org_b_id for f in rows)
+        assert len(rows) == 1
+        assert rows[0].enabled is False
 
     async def test_feature_flags_helper(
         self, async_session: AsyncSession, two_orgs_setup: dict
@@ -209,7 +297,7 @@ class TestRLSEnforcement:
         await async_session.commit()
 
         # Set org A context and check flag
-        await async_session.execute(text(f"SET LOCAL app.current_org_id = '{org_a_id}'"))
+        await async_session.execute(text("SELECT set_config('app.current_org_id', :org_id, true)"), {"org_id": str(org_a_id)})
         enabled_a = await is_feature_enabled(async_session, org_a_id, "ocr_v2")
         assert enabled_a is True
 
@@ -218,11 +306,9 @@ class TestRLSEnforcement:
         assert enabled_none is False
 
     async def test_rls_without_context_returns_no_rows(
-        self, async_session: AsyncSession, two_orgs_setup: dict
+        self, app_user_session: AsyncSession, two_orgs_setup: dict
     ) -> None:
-        """Test that querying without app.current_org_id context returns no rows (RLS blocks all).
-        
-        NOTE: This test is skipped because it runs with a superuser connection,
-        and RLS policies do not apply to superuser connections by PostgreSQL design.
-        """
-        pytest.skip("RLS filtering cannot be tested with superuser connection.")
+        """Test that querying without app.current_org_id context returns no rows (RLS blocks all)."""
+        result = await app_user_session.execute(select(OrgMembership))
+        rows = result.scalars().all()
+        assert len(rows) == 0

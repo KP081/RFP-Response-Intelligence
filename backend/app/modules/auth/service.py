@@ -210,27 +210,28 @@ class AuthService:
     async def get_user_memberships(self, user_id: uuid.UUID) -> list[tuple[Org, OrgMembership, Role]]:
         """Get all org memberships for a user with org details."""
         stmt = (
-            select(Org, OrgMembership, Role)
+            select(Org, OrgMembership)
             .join(OrgMembership, Org.id == OrgMembership.org_id)
-            .join(Role, OrgMembership.role == Role)
             .where(OrgMembership.user_id == user_id)
         )
         result = await self.session.execute(stmt)
-        return [row.tuple() for row in result.all()]
+        return [(org, membership, membership.role) for org, membership in result.all()]
 
     async def get_membership(
         self, user_id: uuid.UUID, org_id: uuid.UUID
     ) -> Optional[tuple[Org, OrgMembership, Role]]:
         """Get a specific org membership for a user."""
         stmt = (
-            select(Org, OrgMembership, Role)
+            select(Org, OrgMembership)
             .join(OrgMembership, Org.id == OrgMembership.org_id)
-            .join(Role, OrgMembership.role == Role)
             .where(OrgMembership.user_id == user_id, OrgMembership.org_id == org_id)
         )
         result = await self.session.execute(stmt)
         row = result.first()
-        return row.tuple() if row else None
+        if row is None:
+            return None
+        org, membership = row
+        return org, membership, membership.role
 
     async def build_me_response(self, user: User) -> MeResponse:
         """Build the /me response with user and memberships."""

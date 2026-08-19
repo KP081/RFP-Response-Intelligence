@@ -7,7 +7,7 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.llm.gateway import ModelGateway
+from app.llm.gateway import ModelGateway, get_model_gateway
 
 logger = structlog.get_logger(__name__)
 
@@ -263,7 +263,7 @@ async def hybrid_search(
         filters = {}
 
     if model_gateway is None:
-        model_gateway = ModelGateway()
+        model_gateway = get_model_gateway()
 
     if correlation_id is None:
         correlation_id = str(uuid.uuid4())
@@ -279,8 +279,17 @@ async def hybrid_search(
 
     session = None
     try:
+        from sqlalchemy import text
+
         from app.db.session import async_session_factory
+
         session = async_session_factory()
+
+        # Set RLS context for this session
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
 
         # Generate query embedding
         embed_correlation_id = f"{correlation_id}-embed"[:36]

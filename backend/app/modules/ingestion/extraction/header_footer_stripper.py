@@ -7,8 +7,6 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-# Threshold for considering blocks as "same" header/footer
-SIMILARITY_THRESHOLD = 0.85
 # Minimum fraction of pages a block must appear on to be considered header/footer
 PAGE_FRACTION_THRESHOLD = 0.6
 # Margin threshold (fraction of page height) for top/bottom margin zones

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audited
 from app.db.session import get_db_session
-from app.llm.gateway import ModelGateway
+from app.llm.gateway import get_model_gateway
 from app.modules.auth.dependencies import get_current_org, get_current_user
 from app.modules.ingestion.search import hybrid_search
 from app.modules.search.schemas import SearchRequest, SearchResponse, SearchResult
@@ -61,8 +61,8 @@ async def search(
         if search_request.filters.date_to:
             filters["date_to"] = search_request.filters.date_to
 
-    # Create ModelGateway instance
-    model_gateway = ModelGateway()
+    # Create ModelGateway instance with Redis caching
+    model_gateway = get_model_gateway()
 
     # Perform hybrid search
     if hasattr(request.state, "correlation_id"):

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.router import router as v1_router
@@ -14,6 +15,7 @@ from app.core.errors import (
     unhandled_exception_handler,
 )
 from app.core.logging import CorrelationIdMiddleware, configure_logging
+from app.core.settings import settings
 from app.db.session import engine
 
 
@@ -30,6 +32,16 @@ def create_app() -> FastAPI:
 
     configure_logging()
     application = FastAPI(title="RFP Response Intelligence API", lifespan=lifespan)
+
+    # CORS configuration for cookie-based auth (httpOnly cookies require explicit origins)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.frontend_urls,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     application.add_middleware(CorrelationIdMiddleware)
     application.add_exception_handler(RequestValidationError, request_validation_exception_handler)
     application.add_exception_handler(StarletteHTTPException, http_exception_handler)
