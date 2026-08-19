@@ -6,6 +6,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from urllib.parse import urlencode
 
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from jose import jwt
@@ -57,16 +58,16 @@ class AuthService:
         self, redirect_uri: str, state: str, code_challenge: str
     ) -> str:
         """Generate the OIDC authorization URL."""
-        return (
-            f"{settings.oidc_issuer.rstrip('/')}/protocol/openid-connect/auth?"
-            f"client_id={settings.oidc_client_id}&"
-            f"redirect_uri={redirect_uri}&"
-            f"response_type=code&"
-            f"scope=openid%20email%20profile&"
-            f"state={state}&"
-            f"code_challenge={code_challenge}&"
-            f"code_challenge_method=S256"
-        )
+        params = {
+            "client_id": settings.oidc_client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        return f"{settings.oidc_issuer.rstrip('/')}/protocol/openid-connect/auth?{urlencode(params)}"
 
     async def exchange_code_for_tokens(
         self, code: str, redirect_uri: str, code_verifier: str

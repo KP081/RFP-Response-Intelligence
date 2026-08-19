@@ -1,15 +1,35 @@
 """pytest configuration and fixtures for backend tests."""
 
+import os
+
+# Set test environment variables BEFORE any other imports
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response")
+os.environ.setdefault("OIDC_ISSUER", "http://localhost:8081/realms/rfp-response-intelligence")
+os.environ.setdefault("OIDC_CLIENT_ID", "rfp-response-intelligence-web")
+os.environ.setdefault("OIDC_CLIENT_SECRET", "local-development-only")
+os.environ.setdefault("OIDC_REDIRECT_URI", "http://localhost:8000/api/v1/auth/callback")
+os.environ.setdefault("JWT_SECRET_KEY", "dev-secret-change-in-production")
+os.environ.setdefault("FRONTEND_URL", "http://localhost:5173")
+
 from collections.abc import AsyncIterator
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.redis import close_redis_client
 from app.db.models import Base
 
 SUPERUSER_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response"
 APP_USER_DATABASE_URL = "postgresql+asyncpg://app_user:app_password@localhost:5432/rfp_response"
+
+
+@pytest.fixture(autouse=True)
+async def _close_redis_after_test() -> AsyncIterator[None]:
+    """Close Redis client after each test to avoid event loop issues."""
+    yield
+    await close_redis_client()
 
 
 @pytest.fixture

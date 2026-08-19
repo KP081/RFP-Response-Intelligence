@@ -77,11 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshAuth();
   }, []);
 
-  const login = (redirectUri?: string) => {
-    const loginUrl = `${import.meta.env.VITE_API_BASE_URL}/auth/login?redirect_uri=${encodeURIComponent(
-      redirectUri || window.location.origin + "/auth/callback"
-    )}`;
-    window.location.href = loginUrl;
+  const login = (returnTo?: string) => {
+    const params = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "";
+    window.location.href = `${import.meta.env.VITE_API_BASE_URL}/auth/login${params}`;
   };
 
   const logout = async () => {

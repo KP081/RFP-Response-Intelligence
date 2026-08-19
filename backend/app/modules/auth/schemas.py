@@ -73,9 +73,9 @@ class CallbackRequest(BaseModel):
 
 
 class PKCEState(BaseModel):
-    """PKCE state stored in session/cookie."""
+    """PKCE state stored in Redis for the duration of the OAuth round-trip."""
 
     code_verifier: str
     state: str
-    redirect_uri: str
+    return_to: str = "/"
     state_created: datetime

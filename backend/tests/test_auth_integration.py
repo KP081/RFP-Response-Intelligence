@@ -7,8 +7,10 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.settings import settings
 from app.db.models import Org, OrgMembership, Role, User
 from app.main import create_app
+from app.modules.auth.router import _sanitize_return_to
 from app.modules.auth.service import AuthService
 
 
@@ -257,3 +259,101 @@ class TestAuthServiceIntegration:
         assert org.id == two_orgs_with_users["org_a_id"]
         assert membership.user_id == user_a_id
         assert role == Role.ADMIN
+
+
+class TestSanitizeReturnTo:
+    """Tests for the _sanitize_return_to helper function."""
+
+    def test_sanitize_return_to_rejects_protocol_relative(self) -> None:
+        """Test that protocol-relative URLs (//evil.com) are rejected."""
+        assert _sanitize_return_to("//evil.com") == "/"
+
+    def test_sanitize_return_to_rejects_https(self) -> None:
+        """Test that absolute HTTPS URLs are rejected."""
+        assert _sanitize_return_to("https://evil.com") == "/"
+
+    def test_sanitize_return_to_rejects_http(self) -> None:
+        """Test that absolute HTTP URLs are rejected."""
+        assert _sanitize_return_to("http://evil.com") == "/"
+
+    def test_sanitize_return_to_rejects_empty_string(self) -> None:
+        """Test that empty strings fall back to /."""
+        assert _sanitize_return_to("") == "/"
+
+    def test_sanitize_return_to_rejects_none(self) -> None:
+        """Test that None values fall back to /."""
+        assert _sanitize_return_to(None) == "/"  # type: ignore[arg-type]
+
+    def test_sanitize_return_to_accepts_normal_path(self) -> None:
+        """Test that normal relative paths are accepted unchanged."""
+        assert _sanitize_return_to("/orgs/123/documents") == "/orgs/123/documents"
+
+    def test_sanitize_return_to_accepts_root(self) -> None:
+        """Test that root path is accepted."""
+        assert _sanitize_return_to("/") == "/"
+
+    def test_sanitize_return_to_accepts_nested_paths(self) -> None:
+        """Test that nested paths are accepted."""
+        assert _sanitize_return_to("/orgs/abc/search?q=test") == "/orgs/abc/search?q=test"
+
+    def test_sanitize_return_to_rejects_double_slash(self) -> None:
+        """Test that paths starting with // are rejected."""
+        assert _sanitize_return_to("//") == "/"
+
+    def test_sanitize_return_to_rejects_whitespace(self) -> None:
+        """Test that paths with whitespace are rejected."""
+        assert _sanitize_return_to("/path with spaces") == "/"
+
+
+class TestLoginEndpoint:
+    """Tests for the /auth/login endpoint."""
+
+    async def test_login_uses_fixed_redirect_uri(self, async_client: AsyncClient) -> None:
+        """Test that /auth/login redirects to Keycloak with the fixed backend redirect_uri."""
+        # We don't follow redirects, we just check the Location header
+        response = await async_client.get("/api/v1/auth/login?return_to=/orgs/123", follow_redirects=False)
+
+        assert response.status_code == 307  # RedirectResponse default
+        location = response.headers.get("location")
+        assert location is not None
+        assert location.startswith(settings.oidc_issuer.rstrip("/") + "/protocol/openid-connect/auth?")
+
+        # Check that redirect_uri in the location is the fixed backend one, properly encoded
+        from urllib.parse import parse_qs, urlparse
+        parsed = urlparse(location)
+        params = parse_qs(parsed.query)
+        assert "redirect_uri" in params
+        # The redirect_uri should be the backend callback URL, not the return_to value
+        expected_redirect_uri = "http://localhost:8000/api/v1/auth/callback"
+        assert params["redirect_uri"][0] == expected_redirect_uri
+        # Ensure return_to was NOT used as redirect_uri
+        assert params["redirect_uri"][0] != "/orgs/123"
+
+    async def test_login_return_to_stored_in_pkce_state(self, async_client: AsyncClient) -> None:
+        """Test that return_to is validated and would be stored in PKCE state."""
+        response = await async_client.get("/api/v1/auth/login?return_to=/orgs/123/documents", follow_redirects=False)
+
+        assert response.status_code == 307
+        location = response.headers.get("location")
+        assert location is not None
+
+        # Check that state parameter is present (PKCE state stored in Redis)
+        from urllib.parse import parse_qs, urlparse
+        parsed = urlparse(location)
+        params = parse_qs(parsed.query)
+        assert "state" in params
+        assert len(params["state"][0]) > 0
+
+    async def test_login_rejects_malicious_return_to(self, async_client: AsyncClient) -> None:
+        """Test that malicious return_to values are sanitized to /."""
+        # Test protocol-relative
+        response = await async_client.get("/api/v1/auth/login?return_to=//evil.com", follow_redirects=False)
+        assert response.status_code == 307
+
+        # Test absolute URL
+        response = await async_client.get("/api/v1/auth/login?return_to=https://evil.com", follow_redirects=False)
+        assert response.status_code == 307
+
+        # Test empty
+        response = await async_client.get("/api/v1/auth/login?return_to=", follow_redirects=False)
+        assert response.status_code == 307

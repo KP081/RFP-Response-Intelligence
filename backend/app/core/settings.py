@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     oidc_issuer: str = "http://localhost:8081/realms/rfp-response-intelligence"
     oidc_client_id: str = "rfp-response-intelligence-web"
     oidc_client_secret: str = "local-development-only"
+    oidc_redirect_uri: str = "http://localhost:8000/api/v1/auth/callback"
 
     # JWT Configuration
     jwt_secret_key: str = "dev-secret-change-in-production"

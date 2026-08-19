@@ -146,7 +146,6 @@ def pipeline_task(
                     await _update_job_status(
                         session, job_id, JobStatus.RUNNING, current_stage=func.__name__, progress_pct=10
                     )
-
                     logger.info("job_started", job_id=str(job_id), job_type=job_type)
 
                     result = await func(*args, **kwargs)
@@ -154,7 +153,6 @@ def pipeline_task(
                     await _update_job_status(
                         session, job_id, JobStatus.SUCCEEDED, current_stage="completed", progress_pct=100
                     )
-
                     logger.info("job_succeeded", job_id=str(job_id), job_type=job_type)
                     return result
 
@@ -170,10 +168,12 @@ def pipeline_task(
                             session, job_id, JobStatus.FAILED, error_message=str(e)[:5000]
                         )
                         logger.error("job_failed_max_retries", job_id=str(job_id), job_type=job_type)
-                    await session.close()
                     # self.retry() always raises (Retry, or MaxRetriesExceededError if exhausted)
-                    # nothing after this line executes.
+                    # the exception propagates out of this function; `finally` below still runs first.
                     raise self.retry(exc=e)
+
+                finally:
+                    await session.close()
 
             return asyncio.run(_run_task())
 

@@ -1,5 +1,6 @@
 """Authentication router for OIDC login flow and session management."""
 
+import re
 import secrets
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -30,6 +31,15 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 PKCE_STATE_TTL_SECONDS = 600
 
+_SAFE_RETURN_TO_RE = re.compile(r"^/(?!/)[^\s]*$")  # single leading slash, no scheme, no protocol-relative //
+
+
+def _sanitize_return_to(value: str) -> str:
+    """Only allow same-origin relative paths, to prevent open-redirect via return_to."""
+    if not value or not _SAFE_RETURN_TO_RE.match(value):
+        return "/"
+    return value
+
 
 async def _store_pkce_state(state: str, data: PKCEState) -> None:
     """Store PKCE state in Redis with TTL."""
@@ -51,23 +61,23 @@ async def _pop_pkce_state(state: str) -> PKCEState | None:
 @router.get("/login")
 async def login(
     request: Request,
-    redirect_uri: Annotated[str, Query(description="Redirect URI after login")] = "http://localhost:5173/auth/callback",
+    return_to: Annotated[str, Query(description="Relative path to return to after login")] = "/",
     auth_service: AuthService = Depends(get_auth_service),
 ) -> RedirectResponse:
     """Initiate OIDC login flow with PKCE."""
     state = secrets.token_urlsafe(32)
     code_verifier, code_challenge = auth_service.generate_pkce_pair()
+    safe_return_to = _sanitize_return_to(return_to)
 
-    # Store PKCE state in Redis
     await _store_pkce_state(state, PKCEState(
         code_verifier=code_verifier,
         state=state,
-        redirect_uri=redirect_uri,
+        return_to=safe_return_to,
         state_created=datetime.now(timezone.utc),
     ))
 
     authorization_url = auth_service.get_authorization_url(
-        redirect_uri=redirect_uri,
+        redirect_uri=settings.oidc_redirect_uri,
         state=state,
         code_challenge=code_challenge,
     )
@@ -104,11 +114,12 @@ async def callback(
             detail="State mismatch",
         )
 
-    # Exchange code for tokens from IdP
+    # Exchange code for tokens from IdP — always use the fixed backend redirect_uri,
+    # matching what was sent to /login and what's registered with Keycloak.
     try:
         idp_tokens = await auth_service.exchange_code_for_tokens(
             code=code,
-            redirect_uri=pkce_state.redirect_uri,
+            redirect_uri=settings.oidc_redirect_uri,
             code_verifier=pkce_state.code_verifier,
         )
     except Exception as e:
@@ -152,8 +163,8 @@ async def callback(
 
     await session.commit()
 
-    # Set tokens in httpOnly cookies
-    response = RedirectResponse(url=pkce_state.redirect_uri.replace("/auth/callback", ""))
+    # Redirect the browser to the frontend, at the path the user originally requested.
+    response = RedirectResponse(url=f"{settings.frontend_url}{pkce_state.return_to}")
 
     # Access token cookie (short-lived)
     response.set_cookie(

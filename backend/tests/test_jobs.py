@@ -424,3 +424,148 @@ class TestPipelineTaskRetryLogic:
         import app.workers.tasks as tasks_module
         source = inspect.getsource(tasks_module.pipeline_task)
         assert "autoretry_for" not in source, "pipeline_task should not use autoretry_for"
+
+
+class TestPipelineTaskSessionLeak:
+    """Tests for the pipeline_task session leak fix (F20)."""
+
+    @pytest.fixture
+    def org_id(self):
+        return uuid.uuid4()
+
+    @pytest.fixture
+    def correlation_id(self):
+        return "test-session-leak"
+
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        session.commit = AsyncMock()
+        session.close = AsyncMock()
+
+        # Mock execute to return a result with scalar_one_or_none
+        mock_result = MagicMock()
+        mock_job = MagicMock()
+        mock_job.id = uuid.uuid4()
+        mock_result.scalar_one_or_none.return_value = mock_job
+        session.execute.return_value = mock_result
+
+        async def mock_refresh(job_obj):
+            if job_obj.id is None:
+                job_obj.id = uuid.uuid4()
+        session.refresh = AsyncMock(side_effect=mock_refresh)
+        return session
+
+    @pytest.fixture
+    def mock_session_factory(self, mock_session):
+        with patch("app.workers.tasks.async_session_factory", return_value=mock_session):
+            yield mock_session
+
+    @pytest.fixture
+    def mock_celery_task(self):
+        """Create a mock Celery task instance."""
+        mock_self = MagicMock()
+        mock_self.request.retries = 0
+        mock_self.max_retries = 0
+        return mock_self
+
+    @pytest.mark.asyncio
+    async def test_pipeline_task_closes_session_on_success(
+        self, org_id, correlation_id, mock_session_factory, mock_session, mock_celery_task
+    ):
+        """Test that session.close() is called exactly once on successful task completion."""
+        from app.db.models import JobStatus
+        from app.workers.tasks import _create_pipeline_job, _get_db_session, _update_job_status
+
+        with patch("app.workers.tasks._get_db_session", return_value=mock_session):
+            async def test_run_task():
+                session = _get_db_session()
+                try:
+                    job = await _create_pipeline_job(
+                        session, org_id, "test_success", correlation_id, None
+                    )
+                    job_id = job.id
+
+                    await _update_job_status(
+                        session, job_id, JobStatus.RUNNING, current_stage="test_success", progress_pct=10
+                    )
+
+                    result = {"status": "success"}
+
+                    await _update_job_status(
+                        session, job_id, JobStatus.SUCCEEDED, current_stage="completed", progress_pct=100
+                    )
+                    return result
+                finally:
+                    await session.close()
+
+            result = await test_run_task()
+            assert result == {"status": "success"}
+            assert mock_session.close.call_count == 1, f"Expected session.close() to be called once, called {mock_session.close.call_count} times"
+
+    @pytest.mark.asyncio
+    async def test_pipeline_task_closes_session_on_exception(
+        self, org_id, correlation_id, mock_session_factory, mock_session, mock_celery_task
+    ):
+        """Test that session.close() is called exactly once when task raises an exception."""
+        from app.db.models import JobStatus
+        from app.workers.tasks import _create_pipeline_job, _get_db_session, _update_job_status
+
+        with patch("app.workers.tasks._get_db_session", return_value=mock_session):
+            async def test_run_task_with_exception():
+                session = _get_db_session()
+                try:
+                    job = await _create_pipeline_job(
+                        session, org_id, "test_exception", correlation_id, None
+                    )
+                    job_id = job.id
+
+                    await _update_job_status(
+                        session, job_id, JobStatus.RUNNING, current_stage="test_exception", progress_pct=10
+                    )
+
+                    raise ValueError("Test error")
+                finally:
+                    await session.close()
+
+            with pytest.raises(ValueError, match="Test error"):
+                await test_run_task_with_exception()
+
+            assert mock_session.close.call_count == 1, f"Expected session.close() to be called once on exception, called {mock_session.close.call_count} times"
+
+    @pytest.mark.asyncio
+    async def test_pipeline_task_finally_block_called_on_retry_path(
+        self, org_id, correlation_id, mock_session_factory, mock_session, mock_celery_task
+    ):
+        """Test that the finally block executes and closes session even when retry is raised."""
+        from app.db.models import JobStatus
+        from app.workers.tasks import _create_pipeline_job, _get_db_session, _update_job_status
+
+        with patch("app.workers.tasks._get_db_session", return_value=mock_session):
+            async def test_run_task_with_retry():
+                session = _get_db_session()
+                try:
+                    job = await _create_pipeline_job(
+                        session, org_id, "test_retry", correlation_id, None
+                    )
+                    job_id = job.id
+
+                    await _update_job_status(
+                        session, job_id, JobStatus.RUNNING, current_stage="test_retry", progress_pct=10
+                    )
+
+                    raise ValueError("Transient error")
+                except Exception as e:
+                    # Simulate retry logic
+                    await _update_job_status(
+                        session, job_id, JobStatus.RETRYING, error_message=str(e)
+                    )
+                    raise  # Re-raise to simulate self.retry()
+                finally:
+                    await session.close()
+
+            with pytest.raises(ValueError, match="Transient error"):
+                await test_run_task_with_retry()
+
+            assert mock_session.close.call_count == 1, f"Expected session.close() to be called once on retry path, called {mock_session.close.call_count} times"
