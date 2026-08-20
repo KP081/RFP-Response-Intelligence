@@ -10,7 +10,29 @@ from urllib.parse import urlencode
 
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from jose import jwt
-from pydantic import EmailStr
+from pydantic import EmailStr, TypeAdapter
+from pydantic_core import PydanticCustomError
+import re
+
+# More lenient email pattern that accepts local domains (e.g., admin@local)
+_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+$")
+
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
+
+
+def _validate_email(email: str) -> str:
+    """Validate email address, accepting local domains without TLD."""
+    if not _EMAIL_PATTERN.match(email):
+        raise PydanticCustomError(
+            "value_error",
+            "value is not a valid email address",
+            {"input_value": email, "input_type": "str"},
+        )
+    # For standard domains, also run the strict EmailStr validation
+    if "." in email.split("@")[-1]:
+        return _EMAIL_ADAPTER.validate_python(email)
+    return email
+from pydantic_core import PydanticCustomError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,9 +129,10 @@ class AuthService:
     async def upsert_user(
         self,
         external_idp_subject: str,
-        email: EmailStr,
+        email: str,
         display_name: str,
     ) -> User:
+        email = _validate_email(email)
         """Upsert user by external_idp_subject, falling back to email."""
         # Try to find by external_idp_subject first
         stmt = select(User).where(User.external_idp_subject == external_idp_subject)

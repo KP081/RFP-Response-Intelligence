@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class TokenResponse(BaseModel):
@@ -30,7 +30,7 @@ class UserResponse(BaseModel):
     """User information response."""
 
     id: UUID
-    email: EmailStr
+    email: str
     display_name: str
     external_idp_subject: Optional[str] = None
     created_at: datetime

@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from pydantic import EmailStr
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import get_redis_client
@@ -85,10 +85,11 @@ async def login(
     return RedirectResponse(url=authorization_url)
 
 
-def get_db_session_dependency() -> Callable[..., AsyncIterator[AsyncSession]]:
-    """Lazy dependency for database session to avoid circular imports."""
-    from app.db.session import get_db_session
-    return get_db_session
+async def get_db_session_dependency():
+    """Database session dependency using global session factory to avoid circular imports."""
+    from app.db.session import async_session_factory
+    async with async_session_factory() as session:
+        yield session
 
 
 @router.get("/callback")
@@ -153,7 +154,7 @@ async def callback(
     # Upsert user in our database
     user = await auth_service.upsert_user(
         external_idp_subject=external_idp_subject,
-        email=EmailStr(email),
+        email=email,
         display_name=display_name,
     )
 
