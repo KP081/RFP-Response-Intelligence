@@ -29,6 +29,8 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: postgres
       KC_DB_PASSWORD: postgres
+      KC_HOSTNAME: http://localhost:8081
+      KC_HEALTH_ENABLED: "true"
     ports:
       - "8081:8080"
     volumes:
@@ -37,7 +39,12 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c 'cat < /dev/null > /dev/tcp/localhost/8080' 2>/dev/null || exit 1"]
+      test:
+        - "CMD-SHELL"
+        - >
+          exec 3<>/dev/tcp/localhost/8080 &&
+          echo -e "GET /realms/rfp-response-intelligence HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 &&
+          timeout 3 cat <&3 | grep -q '"realm":"rfp-response-intelligence"'
       interval: 10s
       timeout: 5s
       retries: 12
@@ -93,8 +100,6 @@ services:
       context: ../backend
     env_file:
       - .env
-    environment:
-      - OIDC_ISSUER=http://keycloak:8080/realms/rfp-response-intelligence
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
