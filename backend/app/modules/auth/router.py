@@ -3,13 +3,11 @@
 import re
 import secrets
 import uuid
-from collections.abc import AsyncIterator, Callable
 from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import get_redis_client

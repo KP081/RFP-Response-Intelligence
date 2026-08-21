@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -12,7 +13,17 @@ from authlib.integrations.httpx_client import AsyncOAuth2Client
 from jose import jwt
 from pydantic import EmailStr, TypeAdapter
 from pydantic_core import PydanticCustomError
-import re
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.settings import settings
+from app.db.models import Org, OrgMembership, Role, User
+from app.modules.auth.schemas import (
+    MeResponse,
+    OrgMembershipResponse,
+    TokenPayload,
+    UserResponse,
+)
 
 # More lenient email pattern that accepts local domains (e.g., admin@local)
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+$")
@@ -32,18 +43,6 @@ def _validate_email(email: str) -> str:
     if "." in email.split("@")[-1]:
         return _EMAIL_ADAPTER.validate_python(email)
     return email
-from pydantic_core import PydanticCustomError
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.settings import settings
-from app.db.models import Org, OrgMembership, Role, User
-from app.modules.auth.schemas import (
-    MeResponse,
-    OrgMembershipResponse,
-    TokenPayload,
-    UserResponse,
-)
 
 
 class AuthService:
