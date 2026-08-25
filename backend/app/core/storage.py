@@ -98,7 +98,8 @@ class S3ObjectStore(ObjectStore):
         async with self._client() as client:
             response = await client.get_object(Bucket=self.bucket, Key=key)
             async with response["Body"] as stream:
-                return await stream.read()
+                data = await stream.read()
+                return data  # type: ignore[no-any-return]
 
     async def get_presigned_url(self, key: str, expires_in: int = 3600) -> PresignedUrlResult:
         """Generate a presigned URL for downloading an object."""

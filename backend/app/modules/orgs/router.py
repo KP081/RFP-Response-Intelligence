@@ -12,7 +12,7 @@ from app.db.models import OrgMembership, Role, User
 from app.db.session import get_db_session
 from app.modules.auth.dependencies import (
     get_current_user,
-    require_role,
+    require_org_role,
 )
 from app.modules.orgs.dependencies import (
     get_orgs_service,
@@ -54,7 +54,7 @@ async def create_org(
 @router.get("/{org_id}", response_model=OrgResponse)
 async def get_org(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_role(Role.VIEWER))],
+    membership: Annotated[OrgMembership, Depends(require_org_role(Role.VIEWER))],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
 ) -> OrgResponse:
     """Get organization by ID."""
@@ -75,7 +75,7 @@ async def get_org(
 @router.get("/{org_id}/members", response_model=list[OrgMemberResponse])
 async def list_members(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_role(Role.VIEWER))],
+    membership: Annotated[OrgMembership, Depends(require_org_role(Role.VIEWER))],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
 ) -> list[OrgMemberResponse]:
     """List all members of an organization. Any member can view."""
@@ -251,7 +251,7 @@ async def remove_member(
 @router.get("/{org_id}/audit-log", response_model=AuditLogListResponse)
 async def list_audit_log(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_role(Role.ADMIN, Role.SECURITY, Role.COMPLIANCE))],
+    membership: Annotated[OrgMembership, Depends(require_org_role(Role.ADMIN, Role.SECURITY, Role.COMPLIANCE))],
     page: int = 1,
     page_size: int = 50,
     resource_type: str | None = None,

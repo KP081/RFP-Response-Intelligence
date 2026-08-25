@@ -8,7 +8,7 @@ from typing import Any, ParamSpec, TypeVar
 
 import structlog
 from celery import Task  # type: ignore[import-untyped]
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import get_object_store
@@ -23,7 +23,7 @@ from app.db.models import (
     PipelineStageStatus,
     RawExtraction,
 )
-from app.db.session import async_session_factory
+from app.db.session import async_session_factory, engine
 from app.llm.gateway import get_model_gateway
 from app.modules.ingestion.chunking import create_chunks_from_blocks
 from app.modules.ingestion.embedding import embed_document_chunks as embed_chunks_func
@@ -138,6 +138,11 @@ def pipeline_task(
             async def _run_task() -> R:
                 session = _get_db_session()
                 try:
+                    # Set RLS context for this session before any database operations
+                    await session.execute(
+                        text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                        {"org_id": str(org_id)},
+                    )
                     job = await _create_pipeline_job(
                         session, org_id, job_type, correlation_id, document_id
                     )
@@ -174,6 +179,7 @@ def pipeline_task(
 
                 finally:
                     await session.close()
+                    await engine.dispose()
 
             return asyncio.run(_run_task())
 
@@ -196,7 +202,7 @@ async def run_ingestion_pipeline(
     This task:
     1. Creates a pipeline job record
     2. Runs the pipeline orchestrator with idempotency checks
-    3. Supports resuming from a specific stage (for retry)
+    3. Supports resuming from a specific stage (for retry/resume)
 
     Args:
         org_id: Organization ID
@@ -208,8 +214,12 @@ async def run_ingestion_pipeline(
         Dictionary with pipeline execution results
     """
     session = _get_db_session()
-
     try:
+        # Set RLS context for this session before any database operations
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
         # Get document
         doc_stmt = select(Document).where(Document.id == document_id)
         doc_result = await session.execute(doc_stmt)
@@ -296,8 +306,12 @@ async def retry_ingestion_pipeline(
         Dictionary with pipeline execution results
     """
     session = _get_db_session()
-
     try:
+        # Set RLS context for this session before any database operations
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
         # Get document
         doc_stmt = select(Document).where(Document.id == document_id)
         doc_result = await session.execute(doc_stmt)
@@ -383,6 +397,11 @@ async def embed_document_chunks(
     model_gateway = get_model_gateway()
 
     try:
+        # Set RLS context for this session before any database operations
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
         # Get document and version
         doc_stmt = select(Document).where(Document.id == document_id)
         doc_result = await session.execute(doc_stmt)
@@ -473,6 +492,11 @@ async def extract_document_content(
     object_store = get_object_store()
 
     try:
+        # Set RLS context for this session before any database operations
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
         # Get document and version
         doc_stmt = select(Document).where(Document.id == document_id)
         doc_result = await session.execute(doc_stmt)
@@ -575,6 +599,11 @@ async def chunk_document(
     session = _get_db_session()
 
     try:
+        # Set RLS context for this session before any database operations
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
         # Get document and version
         doc_stmt = select(Document).where(Document.id == document_id)
         doc_result = await session.execute(doc_stmt)

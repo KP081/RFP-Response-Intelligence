@@ -13,7 +13,7 @@ def get_redis_client() -> redis.Redis:
     if _redis_client is None:
         if not settings.redis_url:
             raise RuntimeError("REDIS_URL not configured")
-        _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+        _redis_client = redis.from_url(settings.redis_url, decode_responses=True)  # type: ignore[no-untyped-call]
     return _redis_client
 
 

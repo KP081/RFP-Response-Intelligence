@@ -4,7 +4,7 @@ import os
 
 # Set test environment variables BEFORE any other imports
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response")
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://app_user:app_password@localhost:5432/rfp_response")
 os.environ.setdefault("OIDC_ISSUER", "http://localhost:8081/realms/rfp-response-intelligence")
 os.environ.setdefault("OIDC_CLIENT_ID", "rfp-response-intelligence-web")
 os.environ.setdefault("OIDC_CLIENT_SECRET", "local-development-only")
@@ -34,13 +34,12 @@ async def _close_redis_after_test() -> AsyncIterator[None]:
 
 @pytest.fixture
 async def async_session() -> AsyncIterator[AsyncSession]:
-    """Provide a superuser session used for setup and test-data seeding.
+    """Provide an app_user session used for setup and test-data seeding.
 
-    RLS is enabled on the tenant-scoped tables here, but because the postgres role
-    bypasses RLS by design, this session is only used for setup and initial data
-    creation. The actual read checks are performed via the app_user_session fixture.
+    RLS is enabled on the tenant-scoped tables here. Because the app_user role
+    does not bypass RLS, this session will correctly enforce RLS policies.
     """
-    engine = create_async_engine(SUPERUSER_DATABASE_URL, pool_pre_ping=True)
+    engine = create_async_engine(APP_USER_DATABASE_URL, pool_pre_ping=True)
 
     try:
         async with engine.begin() as conn:

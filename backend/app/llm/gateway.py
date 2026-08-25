@@ -56,30 +56,32 @@ class ModelGateway:
         """Resolve model tier to actual model name."""
         return self.model_tiers.get(model_tier, settings.llm_default_model_fast)
 
-    def _generate_cache_key(self, cache_key: str) -> str:
-        """Generate a Redis cache key with prefix."""
-        return f"llm_cache:{cache_key}"
+    def _generate_cache_key(self, cache_key: str, org_id: uuid.UUID) -> str:
+        """Generate a Redis cache key with tenant-scoped prefix."""
+        return f"llm_cache:{org_id}:{cache_key}"
 
-    async def _get_cached(self, cache_key: str) -> Optional[dict[str, Any]]:
+    async def _get_cached(self, cache_key: str, org_id: uuid.UUID) -> Optional[dict[str, Any]]:
         """Get cached response from Redis."""
         if not self.redis:
             return None
         try:
-            data = await self.redis.get(self._generate_cache_key(cache_key))
+            data = await self.redis.get(self._generate_cache_key(cache_key, org_id))
             if data:
-                return json.loads(data)
+                return json.loads(data)  # type: ignore[no-any-return]
         except Exception:
             pass
         return None
 
-    async def _set_cached(self, cache_key: str, value: dict[str, Any], ttl: int | None = None) -> None:
+    async def _set_cached(self, cache_key: str, value: dict[str, Any], ttl: int | None = None, org_id: uuid.UUID | None = None) -> None:
         """Set cached response in Redis."""
         if not self.redis:
+            return
+        if org_id is None:
             return
         try:
             ttl = ttl or settings.llm_cache_ttl_seconds
             await self.redis.set(
-                self._generate_cache_key(cache_key),
+                self._generate_cache_key(cache_key, org_id),
                 json.dumps(value),
                 ex=ttl,
             )
@@ -158,7 +160,7 @@ class ModelGateway:
 
         # Check cache first
         if cache_key:
-            cached = await self._get_cached(cache_key)
+            cached = await self._get_cached(cache_key, org_id)
             if cached:
                 latency_ms = int((time.time() - start_time) * 1000)
                 async with self.session_factory() as session:
@@ -178,7 +180,7 @@ class ModelGateway:
                     )
                 if response_schema:
                     return response_schema.model_validate(cached["content"])
-                return cached["content"]
+                return cached["content"]  # type: ignore[no-any-return]
 
         # Build messages
         if isinstance(prompt, str):
@@ -236,7 +238,7 @@ class ModelGateway:
                                 )
                             raise
                 else:
-                    content = response.content
+                    content = response.content  # type: ignore[assignment]
 
                 # Log success
                 async with self.session_factory() as session:
@@ -257,7 +259,7 @@ class ModelGateway:
 
                 # Cache result
                 if cache_key:
-                    await self._set_cached(cache_key, {"content": content}, cache_ttl)
+                    await self._set_cached(cache_key, {"content": content}, cache_ttl, org_id)
 
                 return content
 
@@ -323,7 +325,7 @@ class ModelGateway:
 
         # Check cache first
         if cache_key:
-            cached = await self._get_cached(cache_key)
+            cached = await self._get_cached(cache_key, org_id)
             if cached:
                 latency_ms = int((time.time() - start_time) * 1000)
                 async with self.session_factory() as session:
@@ -341,7 +343,7 @@ class ModelGateway:
                         cost_estimate=0.0,
                         status=LLMCallStatus.CACHE_HIT,
                     )
-                return cached["content"]
+                return cached["content"]  # type: ignore[no-any-return]
 
         # Call provider
         try:
@@ -374,7 +376,7 @@ class ModelGateway:
 
             # Cache result
             if cache_key:
-                await self._set_cached(cache_key, {"content": embeddings}, cache_ttl)
+                await self._set_cached(cache_key, {"content": embeddings}, cache_ttl, org_id)
 
             return embeddings
 

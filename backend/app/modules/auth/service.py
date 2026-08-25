@@ -9,8 +9,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from urllib.parse import urlencode
 
-from authlib.integrations.httpx_client import AsyncOAuth2Client
-from jose import jwt
+from authlib.integrations.httpx_client import AsyncOAuth2Client  # type: ignore[import-untyped]
+from jose import jwt  # type: ignore[import-untyped]
 from pydantic import EmailStr, TypeAdapter
 from pydantic_core import PydanticCustomError
 from sqlalchemy import select
@@ -121,7 +121,7 @@ class AuthService:
             token={"access_token": access_token, "token_type": "Bearer"},
         )
 
-        response = await client.get(userinfo_url)  # type: ignore[attr-defined]
+        response = await client.get(userinfo_url)
         response.raise_for_status()
         return dict(response.json())
 
@@ -219,9 +219,9 @@ class AuthService:
                 algorithms=[settings.jwt_algorithm],
             )
             return TokenPayload(**payload)
-        except jwt.ExpiredSignatureError as e:  # type: ignore[attr-defined]
+        except jwt.ExpiredSignatureError as e:
             raise ValueError("Token has expired") from e
-        except jwt.JWTError as e:  # type: ignore[attr-defined]
+        except jwt.JWTError as e:
             raise ValueError("Invalid token") from e
 
     async def get_user_by_id(self, user_id: uuid.UUID) -> Optional[User]:

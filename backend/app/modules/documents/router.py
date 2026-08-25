@@ -10,16 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import audited
 from app.core.logging import CORRELATION_ID_HEADER
 from app.core.policy import can_export
-from app.db.models import DocumentType, User
+from app.db.models import DocumentType, Role, User
 from app.db.session import get_db_session
-from app.modules.auth.dependencies import get_current_user
-from app.modules.documents.dependencies import (
-    get_current_org_for_documents,
-    get_documents_service,
-    require_document_delete_role,
+from app.modules.auth.dependencies import (
+    get_current_user,
+    require_org_member,
+    require_org_role,
 )
 from app.modules.documents.dependencies import (
     get_document as get_document_dep,
+)
+from app.modules.documents.dependencies import (
+    get_documents_service,
 )
 from app.modules.documents.schemas import (
     ALLOWED_MIME_TYPES,
@@ -32,6 +34,24 @@ from app.modules.documents.schemas import (
 from app.modules.documents.service import DocumentsService
 
 router = APIRouter(prefix="/orgs/{org_id}/documents", tags=["documents"])
+
+
+# Magic byte signatures for allowed file types
+FILE_SIGNATURES = {
+    "application/pdf": [b"%PDF"],
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],  # DOCX (ZIP-based)
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],  # XLSX (ZIP-based)
+    "image/png": [b"\x89PNG\r\n\x1a\n"],
+    "image/jpeg": [b"\xff\xd8\xff"],
+}
+
+
+def validate_file_signature(mime_type: str, file_data: bytes) -> bool:
+    """Validate file content against expected magic bytes for the MIME type."""
+    signatures = FILE_SIGNATURES.get(mime_type)
+    if not signatures:
+        return False
+    return any(file_data.startswith(sig) for sig in signatures)
 
 
 def get_run_ingestion_pipeline() -> Any:
@@ -66,7 +86,7 @@ async def upload_document(
     file: Annotated[UploadFile, File(description="Document file to upload")],
     request: Request,
     document_type: Annotated[DocumentType, Query(description="Type of document")] = DocumentType.OTHER,
-    membership: Annotated[User | None, Depends(get_current_org_for_documents)] = None,
+    membership: Annotated[User | None, Depends(require_org_member)] = None,
     current_user: Annotated[User | None, Depends(get_current_user)] = None,
     documents_service: Annotated[DocumentsService | None, Depends(get_documents_service)] = None,
     session: Annotated[AsyncSession | None, Depends(get_db_session)] = None,
@@ -91,6 +111,13 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File size exceeds maximum allowed size of {DEFAULT_MAX_FILE_SIZE // (1024 * 1024)}MB",
+        )
+
+    # Validate file signature (magic bytes) to prevent MIME type spoofing
+    if not validate_file_signature(file.content_type, file_data):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File content does not match declared MIME type: {file.content_type}",
         )
 
     # Validate filename
@@ -138,7 +165,7 @@ async def upload_document(
 async def list_documents(
     org_id: uuid.UUID,
     document_type: Annotated[DocumentType | None, Query(description="Filter by document type")] = None,
-    membership: Annotated[User | None, Depends(get_current_org_for_documents)] = None,
+    membership: Annotated[User | None, Depends(require_org_member)] = None,
     documents_service: Annotated[DocumentsService | None, Depends(get_documents_service)] = None,
 ) -> list[DocumentListResponse]:
     """List documents for the organization, optionally filtered by type."""
@@ -171,7 +198,7 @@ async def list_documents(
 async def get_document_endpoint(
     org_id: uuid.UUID,
     document: Annotated[DocumentListResponse, Depends(get_document_dep)],
-    membership: Annotated[User | None, Depends(get_current_org_for_documents)] = None,
+    membership: Annotated[User | None, Depends(require_org_member)] = None,
 ) -> DocumentDetailResponse:
     """Get document metadata by ID."""
     return DocumentDetailResponse(
@@ -204,7 +231,7 @@ async def download_document(
     org_id: uuid.UUID,
     document_id: uuid.UUID,
     request: Request,
-    membership: Annotated[User | None, Depends(get_current_org_for_documents)] = None,
+    membership: Annotated[User | None, Depends(require_org_member)] = None,
     current_user: Annotated[User | None, Depends(get_current_user)] = None,
     documents_service: Annotated[DocumentsService | None, Depends(get_documents_service)] = None,
     session: Annotated[AsyncSession | None, Depends(get_db_session)] = None,
@@ -258,7 +285,7 @@ async def delete_document(
     org_id: uuid.UUID,
     document_id: uuid.UUID,
     request: Request,
-    membership: Annotated[User | None, Depends(require_document_delete_role)] = None,
+    membership: Annotated[User | None, Depends(require_org_role(Role.ADMIN, Role.PROPOSAL_MANAGER))] = None,
     current_user: Annotated[User | None, Depends(get_current_user)] = None,
     documents_service: Annotated[DocumentsService | None, Depends(get_documents_service)] = None,
 ) -> DocumentDeleteResponse:
@@ -273,7 +300,7 @@ async def delete_document(
     if document and request:
         request.state.audit_metadata = {"filename": document.filename}
 
-    success = await documents_service.soft_delete_document(document_id, current_user.id)
+    success = await documents_service.soft_delete_document(document_id, current_user.id, org_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

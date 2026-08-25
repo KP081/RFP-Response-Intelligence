@@ -3,6 +3,7 @@
 import re
 import secrets
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -16,7 +17,7 @@ from app.db.models import OrgMembership, Role, User
 from app.modules.auth.dependencies import (
     get_auth_service,
     get_current_user,
-    require_role,
+    require_org_role,
 )
 from app.modules.auth.schemas import (
     MeResponse,
@@ -83,7 +84,7 @@ async def login(
     return RedirectResponse(url=authorization_url)
 
 
-async def get_db_session_dependency():
+async def get_db_session_dependency() -> AsyncIterator[AsyncSession]:
     """Database session dependency using global session factory to avoid circular imports."""
     from app.db.session import async_session_factory
     async with async_session_factory() as session:
@@ -280,7 +281,7 @@ async def logout(response: Response) -> dict[str, str]:
 @router.get("/test-rbac/{org_id}")
 async def test_rbac(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_role(Role.ADMIN, Role.PROPOSAL_MANAGER))],
+    membership: Annotated[OrgMembership, Depends(require_org_role(Role.ADMIN, Role.PROPOSAL_MANAGER))],
 ) -> dict[str, str]:
     """Test endpoint that requires admin or proposal_manager role in the org."""
     return {
@@ -293,7 +294,7 @@ async def test_rbac(
 @router.get("/test-org-access/{org_id}")
 async def test_org_access(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_role(Role.VIEWER))],
+    membership: Annotated[OrgMembership, Depends(require_org_role(Role.VIEWER))],
 ) -> dict[str, str]:
     """Test endpoint that requires at least viewer role in the org."""
     return {

@@ -5,7 +5,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.settings import settings
 
@@ -18,7 +22,7 @@ _migrations_engine = None
 _migrations_session_factory = None
 
 
-def _get_migrations_session_factory():
+def _get_migrations_session_factory() -> async_sessionmaker[AsyncSession]:
     """Lazily create migrations session factory."""
     global _migrations_engine, _migrations_session_factory
     if _migrations_session_factory is None:

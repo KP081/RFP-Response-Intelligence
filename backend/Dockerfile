@@ -18,6 +18,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
 COPY --from=builder /app/.venv /app/.venv
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 COPY app ./app
 
 EXPOSE 8000

@@ -14,9 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import CORRELATION_ID_HEADER
 from app.db.models import Document, User
 from app.db.session import get_db_session_with_org_id
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, require_org_member
 from app.modules.documents.dependencies import get_document as get_document_dep
-from app.modules.orgs import require_org_member
 
 router = APIRouter(prefix="/orgs/{org_id}/documents", tags=["documents"])
 

@@ -1,6 +1,5 @@
 """Embedding generation for document chunks using the ModelGateway."""
 
-import hashlib
 import uuid
 from typing import Any
 
@@ -17,11 +16,6 @@ logger = structlog.get_logger(__name__)
 EMBEDDING_MODEL_TIER = "fast"
 EMBEDDING_BATCH_SIZE = 100
 EMBEDDING_DIMENSION = 1536
-
-
-def _generate_cache_key(content: str) -> str:
-    """Generate a deterministic cache key from chunk content."""
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
 
 
 async def embed_chunks(
@@ -74,7 +68,8 @@ async def embed_chunks(
                 continue
 
             texts.append(chunk.content)
-            cache_keys.append(_generate_cache_key(chunk.content))
+            # Use content as cache key; gateway will add org_id prefix for tenant isolation
+            cache_keys.append(chunk.content)
             chunk_map.append(chunk)
 
         if not texts:

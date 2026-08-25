@@ -1,7 +1,7 @@
 """OpenAI provider implementation."""
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -40,7 +40,7 @@ class OpenAIProvider(LLMProvider):
             ]
             tool_choice = {"type": "function", "function": {"name": "structured_output"}}
 
-            response = await self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(  # type: ignore[call-overload]
                 model=model,
                 messages=messages,
                 tools=tools,
@@ -58,7 +58,7 @@ class OpenAIProvider(LLMProvider):
         else:
             response = await self.client.chat.completions.create(
                 model=model,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
@@ -110,7 +110,7 @@ class OpenAIProvider(LLMProvider):
 class MockProvider(LLMProvider):
     """Mock provider for testing and local development."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.call_count = 0
         self.last_messages: list[dict[str, str]] = []
         self.last_model: str = ""
@@ -134,7 +134,7 @@ class MockProvider(LLMProvider):
             # Return a mock structured response
             schema = response_schema.model_json_schema()
             # Generate a simple mock based on schema properties
-            mock_data = {}
+            mock_data: dict[str, Any] = {}
             for prop_name, prop_info in schema.get("properties", {}).items():
                 prop_type = prop_info.get("type", "string")
                 if prop_type == "string":

@@ -1,5 +1,6 @@
 """Application configuration loaded from the environment."""
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,6 +57,16 @@ class Settings(BaseSettings):
     llm_default_model_reasoning: str = "gpt-4o"
     llm_default_model_vision: str = "gpt-4o"
     llm_cache_ttl_seconds: int = 86400
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        """Fail fast if insecure defaults are used in production."""
+        if self.app_env == "production":
+            if self.jwt_secret_key == "dev-secret-change-in-production":
+                raise ValueError("JWT_SECRET_KEY must be changed from default in production")
+            if self.oidc_client_secret == "local-development-only":
+                raise ValueError("OIDC_CLIENT_SECRET must be changed from default in production")
+        return self
 
 
 settings = Settings()

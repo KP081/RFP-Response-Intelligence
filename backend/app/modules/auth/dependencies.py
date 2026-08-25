@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import OrgMembership, Role, User
+from app.db.session import get_db_session_with_org_id
 from app.modules.auth.schemas import TokenPayload
 from app.modules.auth.service import AuthService
 
@@ -196,5 +197,93 @@ def require_role(*roles: Role) -> Callable[..., Awaitable[OrgMembership]]:
         return await require_role_dependency(
             allowed_role_values, current_user, session, auth_service, org_id
         )
+
+    return role_dependency
+
+
+async def require_org_member(
+    org_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db_session_with_org_id)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> OrgMembership:
+    """Validate that the current user has membership in the requested org.
+
+    The session already has RLS context set via get_db_session_with_org_id,
+    so the membership query will correctly see the org-scoped data.
+    """
+    membership_data = await auth_service.get_membership(current_user.id, org_id)
+
+    if membership_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this organization",
+        )
+
+    _, membership, _ = membership_data
+    return membership
+
+
+def require_org_role(*roles: Role) -> Callable[..., Awaitable[OrgMembership]]:
+    """Dependency factory for org-scoped role-based access control.
+
+    Usage:
+        @router.get("/admin-only")
+        async def admin_endpoint(
+            membership: Annotated[OrgMembership, Depends(require_org_role(Role.ADMIN))]
+        ):
+            ...
+
+        @router.get("/compliance-or-admin")
+        async def compliance_endpoint(
+            membership: Annotated[OrgMembership, Depends(require_org_role(Role.ADMIN, Role.COMPLIANCE))]
+        ):
+            ...
+
+    The org_id is extracted from the path parameter named 'org_id' in the route.
+    The session will have RLS context set before any membership query runs.
+    """
+    allowed_role_values = {role.value for role in roles}
+
+    async def role_dependency(
+        current_user: Annotated[User, Depends(get_current_user)],
+        session: Annotated[AsyncSession, Depends(get_db_session_with_org_id)],
+        auth_service: Annotated[AuthService, Depends(get_auth_service)],
+        request: Request,
+    ) -> OrgMembership:
+        # Extract org_id from path parameters
+        org_id_str = request.path_params.get("org_id")
+        if not org_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Organization ID is required",
+            )
+
+        try:
+            org_id = uuid.UUID(org_id_str)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid organization ID",
+            )
+
+        # Session already has RLS context set via get_db_session_with_org_id
+        membership_data = await auth_service.get_membership(current_user.id, org_id)
+
+        if membership_data is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not a member of this organization",
+            )
+
+        _, membership, role = membership_data
+
+        if role.value not in allowed_role_values:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requires one of roles: {', '.join(allowed_role_values)}",
+            )
+
+        return membership
 
     return role_dependency

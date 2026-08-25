@@ -10,9 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import CORRELATION_ID_HEADER
 from app.db.models import OrgMembership, PipelineJob
 from app.db.session import async_session_factory, get_db_session_with_org_id
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, require_org_member
 from app.modules.jobs.schemas import JobCreate, JobResponse
-from app.modules.orgs import require_org_member
 from app.workers.tasks import ping_task
 
 router = APIRouter(prefix="/orgs/{org_id}/jobs", tags=["jobs"])
