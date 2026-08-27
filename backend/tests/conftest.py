@@ -34,12 +34,11 @@ async def _close_redis_after_test() -> AsyncIterator[None]:
 
 @pytest.fixture
 async def async_session() -> AsyncIterator[AsyncSession]:
-    """Provide an app_user session used for setup and test-data seeding.
+    """Provide a superuser session for schema setup and test data creation.
 
-    RLS is enabled on the tenant-scoped tables here. Because the app_user role
-    does not bypass RLS, this session will correctly enforce RLS policies.
+    This session bypasses RLS and is used for creating test data that spans multiple orgs.
     """
-    engine = create_async_engine(APP_USER_DATABASE_URL, pool_pre_ping=True)
+    engine = create_async_engine(SUPERUSER_DATABASE_URL, pool_pre_ping=True)
 
     try:
         async with engine.begin() as conn:

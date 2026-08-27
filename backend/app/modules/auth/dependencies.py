@@ -10,11 +10,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import OrgMembership, Role, User
-from app.db.session import get_db_session_with_org_id
 from app.modules.auth.schemas import TokenPayload
 from app.modules.auth.service import AuthService
-
-security = HTTPBearer(auto_error=False)
 
 _SessionFactory = TypeVar("_SessionFactory", bound=async_sessionmaker[AsyncSession])
 
@@ -23,6 +20,17 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     """Lazy function to get session factory to avoid circular imports."""
     from app.db.session import async_session_factory
     return async_session_factory
+
+
+
+
+def get_db_session_with_org_id_dep() -> Callable[[uuid.UUID], AsyncIterator[AsyncSession]]:
+    """Lazy function to get db session with org_id dependency to avoid circular imports."""
+    from app.db.session import get_db_session_with_org_id
+    return get_db_session_with_org_id
+
+
+security = HTTPBearer(auto_error=False)
 
 
 async def get_db_session_dependency() -> AsyncIterator[AsyncSession]:
@@ -204,12 +212,12 @@ def require_role(*roles: Role) -> Callable[..., Awaitable[OrgMembership]]:
 async def require_org_member(
     org_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(get_db_session_with_org_id)],
+    session: Annotated[AsyncSession, Depends(get_db_session_with_org_id_dep)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> OrgMembership:
     """Validate that the current user has membership in the requested org.
 
-    The session already has RLS context set via get_db_session_with_org_id,
+    The session already has RLS context set via get_db_session_with_org_id_dep,
     so the membership query will correctly see the org-scoped data.
     """
     membership_data = await auth_service.get_membership(current_user.id, org_id)
@@ -247,7 +255,7 @@ def require_org_role(*roles: Role) -> Callable[..., Awaitable[OrgMembership]]:
 
     async def role_dependency(
         current_user: Annotated[User, Depends(get_current_user)],
-        session: Annotated[AsyncSession, Depends(get_db_session_with_org_id)],
+        session: Annotated[AsyncSession, Depends(get_db_session_dependency)],
         auth_service: Annotated[AuthService, Depends(get_auth_service)],
         request: Request,
     ) -> OrgMembership:
@@ -267,7 +275,12 @@ def require_org_role(*roles: Role) -> Callable[..., Awaitable[OrgMembership]]:
                 detail="Invalid organization ID",
             )
 
-        # Session already has RLS context set via get_db_session_with_org_id
+        # Set RLS context on this session before any query
+        await session.execute(
+            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            {"org_id": str(org_id)},
+        )
+
         membership_data = await auth_service.get_membership(current_user.id, org_id)
 
         if membership_data is None:
