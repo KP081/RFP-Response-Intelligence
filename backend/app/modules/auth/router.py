@@ -9,7 +9,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import get_redis_client
 from app.core.settings import settings
@@ -84,20 +83,12 @@ async def login(
     return RedirectResponse(url=authorization_url)
 
 
-async def get_db_session_dependency() -> AsyncIterator[AsyncSession]:
-    """Database session dependency using global session factory to avoid circular imports."""
-    from app.db.session import async_session_factory
-    async with async_session_factory() as session:
-        yield session
-
-
 @router.get("/callback")
 async def callback(
     request: Request,
     code: Annotated[str, Query()],
     state: Annotated[str, Query()],
     auth_service: AuthService = Depends(get_auth_service),
-    session: AsyncSession = Depends(get_db_session_dependency),
 ) -> Response:
     """Handle OIDC callback, exchange code for tokens, and issue app tokens."""
     # Retrieve and validate PKCE state from Redis
@@ -161,7 +152,7 @@ async def callback(
     access_token = auth_service.create_access_token(user)
     refresh_token = auth_service.create_refresh_token(user)
 
-    await session.commit()
+    await auth_service.session.commit()
 
     # Redirect the browser to the frontend, at the path the user originally requested.
     response = RedirectResponse(url=f"{settings.frontend_url}{pkce_state.return_to}")
@@ -196,7 +187,6 @@ async def refresh(
     request: Request,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service),
-    session: AsyncSession = Depends(get_db_session_dependency),
 ) -> TokenResponse:
     """Refresh the access token using the refresh token."""
     refresh_token = request.cookies.get("refresh_token")

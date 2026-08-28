@@ -547,7 +547,7 @@ class TestPKCERedisStorage:
         return PKCEState(
             code_verifier="test-verifier",
             state="test-state",
-            redirect_uri="http://localhost:5173/auth/callback",
+            return_to="/",
             state_created=datetime.now(timezone.utc),
         )
 
@@ -586,7 +586,7 @@ class TestPKCERedisStorage:
             assert retrieved is not None
             assert retrieved.code_verifier == pkce_state.code_verifier
             assert retrieved.state == pkce_state.state
-            assert retrieved.redirect_uri == pkce_state.redirect_uri
+            assert retrieved.return_to == pkce_state.return_to
             
             # Verify Redis get and delete were called
             mock_redis.get.assert_called_once_with(f"pkce:{state}")
