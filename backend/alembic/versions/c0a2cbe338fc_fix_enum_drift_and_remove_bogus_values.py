@@ -25,14 +25,14 @@ def upgrade() -> None:
     # Valid roles from the model
     valid_roles = "('admin', 'proposal_manager', 'sales', 'presales_architect', 'legal', 'security', 'compliance', 'viewer')"
     
-    # Update any bogus 'USER' values to a valid default (e.g., 'viewer')
-    op.execute("UPDATE org_memberships SET role = 'viewer' WHERE role = 'USER'")
-    # Also fix any other uppercase roles to lowercase
-    op.execute("UPDATE org_memberships SET role = LOWER(role) WHERE role IN ('ADMIN', 'VIEWER')")
-    
-    # Convert org_memberships.role from native enum to VARCHAR + CHECK
+    # Convert org_memberships.role from native enum to VARCHAR first
     op.execute("ALTER TABLE org_memberships ALTER COLUMN role DROP DEFAULT")
     op.execute("ALTER TABLE org_memberships ALTER COLUMN role TYPE VARCHAR USING role::text")
+    
+    # Now fix bogus/uppercase values (column is now VARCHAR)
+    op.execute("UPDATE org_memberships SET role = 'viewer' WHERE role = 'USER'")
+    op.execute("UPDATE org_memberships SET role = LOWER(role) WHERE role IN ('ADMIN', 'VIEWER')")
+    
     op.execute("ALTER TABLE org_memberships ALTER COLUMN role SET DEFAULT 'viewer'")
     op.execute(f"ALTER TABLE org_memberships ADD CONSTRAINT org_memberships_role_check CHECK (role IN {valid_roles})")
     
@@ -44,11 +44,13 @@ def upgrade() -> None:
     # ============================================================
     valid_doc_status = "('uploaded', 'processing', 'ready_for_chunking', 'ready', 'failed')"
     
-    # Normalize to lowercase
-    op.execute("UPDATE documents SET status = LOWER(status)")
-    
+    # Convert documents.status from native enum to VARCHAR first
     op.execute("ALTER TABLE documents ALTER COLUMN status DROP DEFAULT")
     op.execute("ALTER TABLE documents ALTER COLUMN status TYPE VARCHAR USING status::text")
+    
+    # Now normalize to lowercase (column is now VARCHAR)
+    op.execute("UPDATE documents SET status = LOWER(status)")
+    
     op.execute("ALTER TABLE documents ALTER COLUMN status SET DEFAULT 'uploaded'")
     op.execute(f"ALTER TABLE documents ADD CONSTRAINT documents_status_check CHECK (status IN {valid_doc_status})")
     
@@ -59,10 +61,11 @@ def upgrade() -> None:
     # ============================================================
     valid_doc_type = "('rfp', 'rfq', 'rfi', 'knowledge_base', 'other')"
     
-    op.execute("UPDATE documents SET document_type = LOWER(document_type)")
-    
     op.execute("ALTER TABLE documents ALTER COLUMN document_type DROP DEFAULT")
     op.execute("ALTER TABLE documents ALTER COLUMN document_type TYPE VARCHAR USING document_type::text")
+    
+    op.execute("UPDATE documents SET document_type = LOWER(document_type)")
+    
     op.execute("ALTER TABLE documents ALTER COLUMN document_type SET DEFAULT 'other'")
     op.execute(f"ALTER TABLE documents ADD CONSTRAINT documents_document_type_check CHECK (document_type IN {valid_doc_type})")
     
@@ -73,10 +76,11 @@ def upgrade() -> None:
     # ============================================================
     valid_invite_status = "('pending', 'accepted', 'revoked')"
     
-    op.execute("UPDATE org_invites SET status = LOWER(status)")
-    
     op.execute("ALTER TABLE org_invites ALTER COLUMN status DROP DEFAULT")
     op.execute("ALTER TABLE org_invites ALTER COLUMN status TYPE VARCHAR USING status::text")
+    
+    op.execute("UPDATE org_invites SET status = LOWER(status)")
+    
     op.execute("ALTER TABLE org_invites ALTER COLUMN status SET DEFAULT 'pending'")
     op.execute(f"ALTER TABLE org_invites ADD CONSTRAINT org_invites_status_check CHECK (status IN {valid_invite_status})")
     
@@ -87,10 +91,11 @@ def upgrade() -> None:
     # ============================================================
     valid_job_status = "('queued', 'running', 'succeeded', 'failed', 'retrying')"
     
-    op.execute("UPDATE pipeline_jobs SET status = LOWER(status)")
-    
     op.execute("ALTER TABLE pipeline_jobs ALTER COLUMN status DROP DEFAULT")
     op.execute("ALTER TABLE pipeline_jobs ALTER COLUMN status TYPE VARCHAR USING status::text")
+    
+    op.execute("UPDATE pipeline_jobs SET status = LOWER(status)")
+    
     op.execute("ALTER TABLE pipeline_jobs ALTER COLUMN status SET DEFAULT 'queued'")
     op.execute(f"ALTER TABLE pipeline_jobs ADD CONSTRAINT pipeline_jobs_status_check CHECK (status IN {valid_job_status})")
     
@@ -101,10 +106,11 @@ def upgrade() -> None:
     # ============================================================
     valid_llm_call_status = "('success', 'failed', 'cache_hit')"
     
-    op.execute("UPDATE llm_calls SET status = LOWER(status)")
-    
     op.execute("ALTER TABLE llm_calls ALTER COLUMN status DROP DEFAULT")
     op.execute("ALTER TABLE llm_calls ALTER COLUMN status TYPE VARCHAR USING status::text")
+    
+    op.execute("UPDATE llm_calls SET status = LOWER(status)")
+    
     op.execute("ALTER TABLE llm_calls ALTER COLUMN status SET DEFAULT 'success'")
     op.execute(f"ALTER TABLE llm_calls ADD CONSTRAINT llm_calls_status_check CHECK (status IN {valid_llm_call_status})")
     
@@ -116,14 +122,13 @@ def upgrade() -> None:
     # ============================================================
     valid_pipeline_stage = "('extraction', 'chunking', 'embedding', 'completed')"
     
-    op.execute("UPDATE pipeline_jobs SET current_stage = LOWER(current_stage)")
-    op.execute("UPDATE documents SET pipeline_stage = LOWER(pipeline_stage)")
-    
     op.execute("ALTER TABLE pipeline_jobs ALTER COLUMN current_stage DROP DEFAULT")
     op.execute("ALTER TABLE pipeline_jobs ALTER COLUMN current_stage TYPE VARCHAR USING current_stage::text")
+    op.execute("UPDATE pipeline_jobs SET current_stage = LOWER(current_stage)")
     
     op.execute("ALTER TABLE documents ALTER COLUMN pipeline_stage DROP DEFAULT")
     op.execute("ALTER TABLE documents ALTER COLUMN pipeline_stage TYPE VARCHAR USING pipeline_stage::text")
+    op.execute("UPDATE documents SET pipeline_stage = LOWER(pipeline_stage)")
     
     op.execute(f"ALTER TABLE pipeline_jobs ADD CONSTRAINT pipeline_jobs_current_stage_check CHECK (current_stage IN {valid_pipeline_stage})")
     op.execute(f"ALTER TABLE documents ADD CONSTRAINT documents_pipeline_stage_check CHECK (pipeline_stage IN {valid_pipeline_stage})")
@@ -136,10 +141,10 @@ def upgrade() -> None:
     # ============================================================
     valid_pipeline_stage_status = "('queued', 'running', 'succeeded', 'failed', 'skipped')"
     
-    op.execute("UPDATE documents SET pipeline_stage_status = LOWER(pipeline_stage_status)")
-    
     op.execute("ALTER TABLE documents ALTER COLUMN pipeline_stage_status DROP DEFAULT")
     op.execute("ALTER TABLE documents ALTER COLUMN pipeline_stage_status TYPE VARCHAR USING pipeline_stage_status::text")
+    op.execute("UPDATE documents SET pipeline_stage_status = LOWER(pipeline_stage_status)")
+    
     op.execute("ALTER TABLE documents ALTER COLUMN pipeline_stage_status SET DEFAULT 'queued'")
     op.execute(f"ALTER TABLE documents ADD CONSTRAINT documents_pipeline_stage_status_check CHECK (pipeline_stage_status IN {valid_pipeline_stage_status})")
     
@@ -150,10 +155,10 @@ def upgrade() -> None:
     # ============================================================
     valid_chunk_type = "('text', 'table', 'heading', 'figure', 'code')"
     
-    op.execute("UPDATE chunks SET chunk_type = LOWER(chunk_type)")
-    
     op.execute("ALTER TABLE chunks ALTER COLUMN chunk_type DROP DEFAULT")
     op.execute("ALTER TABLE chunks ALTER COLUMN chunk_type TYPE VARCHAR USING chunk_type::text")
+    op.execute("UPDATE chunks SET chunk_type = LOWER(chunk_type)")
+    
     op.execute(f"ALTER TABLE chunks ADD CONSTRAINT chunks_chunk_type_check CHECK (chunk_type IN {valid_chunk_type})")
     
     op.execute("DROP TYPE IF EXISTS chunk_type_enum")
