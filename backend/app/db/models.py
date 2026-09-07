@@ -206,7 +206,7 @@ class OrgMembership(Base, TenantScopedMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[Role] = mapped_column(
-        SQLEnum(Role, native_enum=False), nullable=False
+        SQLEnum(Role, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -284,14 +284,14 @@ class OrgInvite(Base, TenantScopedMixin):
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(
-        SQLEnum(Role, native_enum=False), nullable=False
+        SQLEnum(Role, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False
     )
     token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     invited_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[InviteStatus] = mapped_column(
-        SQLEnum(InviteStatus, native_enum=False), nullable=False, default=InviteStatus.PENDING
+        SQLEnum(InviteStatus, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=InviteStatus.PENDING
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -319,16 +319,16 @@ class Document(Base, TenantScopedMixin):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     document_type: Mapped[DocumentType] = mapped_column(
-        SQLEnum(DocumentType, native_enum=False), nullable=False, default=DocumentType.OTHER
+        SQLEnum(DocumentType, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=DocumentType.OTHER
     )
     status: Mapped[DocumentStatus] = mapped_column(
-        SQLEnum(DocumentStatus, native_enum=False), nullable=False, default=DocumentStatus.UPLOADED
+        SQLEnum(DocumentStatus, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=DocumentStatus.UPLOADED
     )
     pipeline_stage: Mapped[PipelineStage | None] = mapped_column(
-        SQLEnum(PipelineStage, native_enum=False), nullable=True
+        SQLEnum(PipelineStage, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=True
     )
     pipeline_stage_status: Mapped[PipelineStageStatus] = mapped_column(
-        SQLEnum(PipelineStageStatus, native_enum=False), nullable=False, default=PipelineStageStatus.QUEUED
+        SQLEnum(PipelineStageStatus, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=PipelineStageStatus.QUEUED
     )
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
     size_bytes: Mapped[int] = mapped_column(nullable=False)
@@ -404,7 +404,7 @@ class PipelineJob(Base, TenantScopedMixin):
     )
     job_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     status: Mapped[JobStatus] = mapped_column(
-        SQLEnum(JobStatus, native_enum=False), nullable=False, default=JobStatus.QUEUED
+        SQLEnum(JobStatus, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=JobStatus.QUEUED
     )
     current_stage: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     progress_pct: Mapped[int] = mapped_column(nullable=False, default=0)
@@ -439,7 +439,7 @@ class LLMCall(Base, TenantScopedMixin):
     latency_ms: Mapped[int] = mapped_column(nullable=False, default=0)
     cost_estimate: Mapped[float] = mapped_column(nullable=False, default=0.0)
     status: Mapped[LLMCallStatus] = mapped_column(
-        SQLEnum(LLMCallStatus, native_enum=False), nullable=False, default=LLMCallStatus.SUCCESS
+        SQLEnum(LLMCallStatus, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=LLMCallStatus.SUCCESS
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -463,7 +463,7 @@ class Chunk(Base, TenantScopedMixin):
     chunk_index: Mapped[int] = mapped_column(nullable=False)
     content: Mapped[str] = mapped_column(nullable=False)
     chunk_type: Mapped[ChunkType] = mapped_column(
-        SQLEnum(ChunkType, native_enum=False), nullable=False
+        SQLEnum(ChunkType, native_enum=False, values_callable=lambda obj: [e.value for e in obj]), nullable=False
     )
     page_start: Mapped[int] = mapped_column(nullable=False)
     page_end: Mapped[int] = mapped_column(nullable=False)

@@ -3,7 +3,6 @@
 import re
 import secrets
 import uuid
-from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Annotated
 
