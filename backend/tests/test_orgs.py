@@ -18,8 +18,14 @@ class TestOrgsService:
     """Tests for OrgsService."""
 
     @pytest.fixture
-    def mock_session(self) -> AsyncMock:
-        return AsyncMock()
+    def mock_session(self) -> MagicMock:
+        session = MagicMock()
+        session.add = MagicMock()
+        session.delete = AsyncMock()
+        session.execute = AsyncMock()
+        session.flush = AsyncMock()
+        session.get = AsyncMock()
+        return session
 
     @pytest.fixture
     def orgs_service(self, mock_session: AsyncMock) -> OrgsService:
@@ -466,8 +472,14 @@ class TestOrgsDependencies:
     """Tests for orgs dependencies (get_current_org, require_org_admin)."""
 
     @pytest.fixture
-    def mock_session(self) -> AsyncMock:
-        return AsyncMock()
+    def mock_session(self) -> MagicMock:
+        session = MagicMock()
+        session.add = MagicMock()
+        session.delete = AsyncMock()
+        session.execute = AsyncMock()
+        session.flush = AsyncMock()
+        session.get = AsyncMock()
+        return session
 
     @pytest.fixture
     def auth_service(self) -> AsyncMock:

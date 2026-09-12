@@ -12,11 +12,11 @@ from app.db.models import OrgMembership, Role, User
 from app.db.session import get_db_session
 from app.modules.auth.dependencies import (
     get_current_user,
+    require_org_member,
     require_org_role,
 )
 from app.modules.orgs.dependencies import (
     get_orgs_service,
-    require_org_admin,
 )
 from app.modules.orgs.schemas import (
     AuditLogEntryResponse,
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/orgs", tags=["organizations"])
 @router.post("", response_model=OrgResponse, status_code=status.HTTP_201_CREATED)
 async def create_org(
     org_data: OrgCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user)],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
 ) -> OrgResponse:
     """Create a new organization. The creator becomes admin."""
@@ -54,7 +54,7 @@ async def create_org(
 @router.get("/{org_id}", response_model=OrgResponse)
 async def get_org(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_org_role(Role.VIEWER))],
+    membership: Annotated[OrgMembership | None, Depends(require_org_member)],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
 ) -> OrgResponse:
     """Get organization by ID."""
@@ -75,7 +75,7 @@ async def get_org(
 @router.get("/{org_id}/members", response_model=list[OrgMemberResponse])
 async def list_members(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_org_role(Role.VIEWER))],
+    membership: Annotated[OrgMembership | None, Depends(require_org_member)],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
 ) -> list[OrgMemberResponse]:
     """List all members of an organization. Any member can view."""
@@ -96,9 +96,9 @@ async def list_members(
 async def create_invite(
     org_id: uuid.UUID,
     invite_data: InviteCreate,
-    membership: Annotated[OrgMembership, Depends(require_org_admin)],
+    membership: Annotated[OrgMembership | None, Depends(require_org_role(Role.ADMIN))],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user)],
 ) -> InviteResponse:
     """Create an organization invite. Requires admin role."""
     # Validate role
@@ -136,7 +136,7 @@ async def create_invite(
 @router.post("/invites/{token}/accept", response_model=InviteAcceptResponse)
 async def accept_invite(
     token: str,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user)],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
 ) -> InviteAcceptResponse:
     """Accept an organization invite."""
@@ -161,9 +161,9 @@ async def update_member_role(
     org_id: uuid.UUID,
     user_id: uuid.UUID,
     member_update: MemberUpdate,
-    membership: Annotated[OrgMembership, Depends(require_org_admin)],
+    membership: Annotated[OrgMembership | None, Depends(require_org_role(Role.ADMIN))],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> OrgMemberResponse:
     """Update a member's role. Requires admin role."""
@@ -218,9 +218,9 @@ async def update_member_role(
 async def remove_member(
     org_id: uuid.UUID,
     user_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_org_admin)],
+    membership: Annotated[OrgMembership | None, Depends(require_org_role(Role.ADMIN))],
     orgs_service: Annotated[OrgsService, Depends(get_orgs_service)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> MemberRemoveResponse:
     """Remove a member from the organization. Requires admin role."""

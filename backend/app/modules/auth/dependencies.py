@@ -250,6 +250,11 @@ def require_org_role(*roles: Role) -> Callable[..., Awaitable[OrgMembership]]:
 
     The org_id is extracted from the path parameter named 'org_id' in the route.
     The session will have RLS context set before any membership query runs.
+
+    Note: This performs exact-set role matching (not hierarchical/tiered).
+    For endpoints meant to be accessible to any org member regardless of role,
+    use `require_org_member` instead of `require_org_role(Role.VIEWER)`
+    or listing all roles explicitly.
     """
     allowed_role_values = {role.value for role in roles}
 

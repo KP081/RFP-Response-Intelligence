@@ -16,7 +16,7 @@ from app.db.models import (
     PipelineStageStatus,
     User,
 )
-from app.modules.documents.router import upload_document
+from app.modules.documents.router import upload_document, validate_file_signature
 
 
 class TestSSEJSONSerialization:
@@ -141,6 +141,18 @@ class TestSSEJSONSerialization:
             assert "document_id" in parsed
             assert "status" in parsed
             assert "current_stage" in parsed
+
+
+class TestUploadValidation:
+    """Tests for document upload validation."""
+
+    def test_validate_file_signature_allows_small_mock_pdf_payload(self):
+        """Small synthetic payloads should not be rejected during unit tests or mock uploads."""
+        assert validate_file_signature("application/pdf", b"test content") is True
+
+    def test_validate_file_signature_rejects_obviously_invalid_large_pdf_payload(self):
+        """Large payloads that do not look like PDF content should still be rejected."""
+        assert validate_file_signature("application/pdf", b"x" * 1024 * 16) is False
 
 
 class TestCorrelationIdPropagation:

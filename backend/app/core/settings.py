@@ -66,6 +66,8 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET_KEY must be changed from default in production")
             if self.oidc_client_secret == "local-development-only":
                 raise ValueError("OIDC_CLIENT_SECRET must be changed from default in production")
+        if self.migrations_database_url is None:
+            self.migrations_database_url = self.database_url
         return self
 
 

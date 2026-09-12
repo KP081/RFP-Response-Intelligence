@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.settings import settings
 from app.db.models import Org, OrgMembership, Role, User
 from app.main import create_app
+from tests.conftest import set_org_context
 from app.modules.auth.router import _sanitize_return_to
 from app.modules.auth.service import AuthService
 
@@ -73,6 +74,7 @@ async def two_orgs_with_users(async_session: AsyncSession) -> dict:
     await async_session.flush()
 
     # Membership in Org A
+    await set_org_context(async_session, org_a_id)
     membership_a = OrgMembership(
         id=uuid.uuid4(),
         org_id=org_a_id,
@@ -82,6 +84,7 @@ async def two_orgs_with_users(async_session: AsyncSession) -> dict:
     async_session.add(membership_a)
 
     # Membership in Org B
+    await set_org_context(async_session, org_b_id)
     membership_b = OrgMembership(
         id=uuid.uuid4(),
         org_id=org_b_id,

@@ -1,5 +1,6 @@
 """Async SQLAlchemy engine and per-request session dependency."""
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -13,11 +14,61 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.settings import settings
 
-engine = create_async_engine(settings.database_url, pool_pre_ping=True)
-async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+class LoopAwareEngine:
+    """Create one SQLAlchemy AsyncEngine per event loop while preserving the old `engine` API."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+        self._engines: dict[asyncio.AbstractEventLoop, object] = {}
+
+    def _get_engine(self) -> object:
+        loop = asyncio.get_running_loop()
+        if loop not in self._engines:
+            self._engines[loop] = create_async_engine(self.url, pool_pre_ping=True)
+        return self._engines[loop]
+
+    def __getattr__(self, name: str):
+        try:
+            return getattr(self._get_engine(), name)
+        except RuntimeError as exc:
+            raise AttributeError(name) from exc
+
+    async def dispose(self) -> None:
+        for engine in list(self._engines.values()):
+            await engine.dispose()
+        self._engines.clear()
+
+
+class LoopAwareSessionFactory:
+    """Create SQLAlchemy session factories per active event loop."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+        self._factories: dict[asyncio.AbstractEventLoop, async_sessionmaker[AsyncSession]] = {}
+
+    def _get_factory(self) -> async_sessionmaker[AsyncSession]:
+        loop = asyncio.get_running_loop()
+        if loop not in self._factories:
+            engine = create_async_engine(self.url, pool_pre_ping=True)
+            self._factories[loop] = async_sessionmaker(engine, expire_on_commit=False)
+        return self._factories[loop]
+
+    def __call__(self) -> AsyncSession:
+        return self._get_factory()()
+
+    def __getattr__(self, name: str):
+        try:
+            return getattr(self._get_factory(), name)
+        except RuntimeError as exc:
+            raise AttributeError(name) from exc
+
+
+engine = LoopAwareEngine(settings.database_url)
+async_session_factory = LoopAwareSessionFactory(settings.database_url)
 
 # Migrations/superuser session factory for RLS bypass (e.g. invite token lookup before context is established)
-# Created lazily since migrations_database_url may be None in test environments
+# Created lazily per event loop since migrations_database_url may be None in test environments.
 _migrations_engine = None
 _migrations_session_factory = None
 
@@ -37,7 +88,12 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
     """Yield one database session for the duration of a request."""
 
     async with async_session_factory() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 async def get_db_session_with_org_id(org_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
@@ -54,13 +110,18 @@ async def get_db_session_with_org_id(org_id: uuid.UUID) -> AsyncIterator[AsyncSe
     """
 
     async with async_session_factory() as session:
-        # set_config() accepts bind parameters (unlike SET LOCAL) and with
-        # is_local=true it reproduces SET LOCAL's transaction-scoped behavior.
-        await session.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, true)"),
-            {"org_id": str(org_id)},
-        )
-        yield session
+        try:
+            # set_config() accepts bind parameters (unlike SET LOCAL) and with
+            # is_local=true it reproduces SET LOCAL's transaction-scoped behavior.
+            await session.execute(
+                text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                {"org_id": str(org_id)},
+            )
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 @asynccontextmanager

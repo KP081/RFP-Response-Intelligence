@@ -230,9 +230,12 @@ class TestPipelineTaskDecorator:
     @pytest.fixture
     def mock_session(self):
         session = AsyncMock()
+        session.add = MagicMock()
+        session.delete = MagicMock()
         session.execute = AsyncMock()
         session.commit = AsyncMock()
-        
+        session.flush = AsyncMock()
+
         # Mock refresh to set an ID on the job object
         async def mock_refresh(job_obj):
             if job_obj.id is None:
@@ -351,9 +354,11 @@ class TestPipelineTaskRetryLogic:
     @pytest.fixture
     def mock_session(self):
         session = AsyncMock()
+        session.add = MagicMock()
+        session.delete = MagicMock()
         session.execute = AsyncMock()
         session.commit = AsyncMock()
-        
+
         async def mock_refresh(job_obj):
             if job_obj.id is None:
                 job_obj.id = uuid.uuid4()
@@ -440,9 +445,11 @@ class TestPipelineTaskSessionLeak:
     @pytest.fixture
     def mock_session(self):
         session = AsyncMock()
+        session.add = MagicMock()
         session.execute = AsyncMock()
         session.commit = AsyncMock()
         session.close = AsyncMock()
+        session.delete = MagicMock()
 
         # Mock execute to return a result with scalar_one_or_none
         mock_result = MagicMock()

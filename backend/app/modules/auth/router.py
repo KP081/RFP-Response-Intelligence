@@ -15,6 +15,7 @@ from app.db.models import OrgMembership, Role, User
 from app.modules.auth.dependencies import (
     get_auth_service,
     get_current_user,
+    require_org_member,
     require_org_role,
 )
 from app.modules.auth.schemas import (
@@ -283,7 +284,7 @@ async def test_rbac(
 @router.get("/test-org-access/{org_id}")
 async def test_org_access(
     org_id: uuid.UUID,
-    membership: Annotated[OrgMembership, Depends(require_org_role(Role.VIEWER))],
+    membership: Annotated[OrgMembership, Depends(require_org_member)],
 ) -> dict[str, str]:
     """Test endpoint that requires at least viewer role in the org."""
     return {

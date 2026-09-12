@@ -10,6 +10,7 @@ import structlog
 from app.db.models import DocumentStatus
 from app.db.session import async_session_factory
 from app.llm.gateway import ModelGateway
+from tests.conftest import set_org_context
 from app.modules.ingestion.chunking import create_chunks_from_blocks
 from app.modules.ingestion.embedding import embed_document_chunks
 from app.modules.ingestion.extraction import extract_pdf_content
@@ -57,6 +58,7 @@ async def test_full_pipeline_upload_extract_chunk_embed():
         await session.flush()
 
         # Create membership
+        await set_org_context(session, org.id)
         membership = OrgMembership(
             org_id=org.id,
             user_id=user.id,
@@ -197,6 +199,7 @@ async def test_hybrid_search_liquidated_damages():
         await session.flush()
 
         # Create membership
+        await set_org_context(session, org.id)
         membership = OrgMembership(org_id=org.id, user_id=user.id, role=Role.ADMIN)
         session.add(membership)
         await session.flush()
@@ -320,6 +323,7 @@ async def test_hybrid_search_application_architect():
         await session.flush()
 
         # Create membership
+        await set_org_context(session, org.id)
         membership = OrgMembership(org_id=org.id, user_id=user.id, role=Role.ADMIN)
         session.add(membership)
         await session.flush()
@@ -439,6 +443,7 @@ async def test_hybrid_search_filter_by_document_id():
         await session.flush()
 
         # Create membership
+        await set_org_context(session, org.id)
         membership = OrgMembership(org_id=org.id, user_id=user.id, role=Role.ADMIN)
         session.add(membership)
         await session.flush()
@@ -661,6 +666,7 @@ async def test_embedding_cache_hit():
         await session.flush()
 
         # Create membership
+        await set_org_context(session, org.id)
         membership = OrgMembership(org_id=org.id, user_id=user.id, role=Role.ADMIN)
         session.add(membership)
         await session.flush()

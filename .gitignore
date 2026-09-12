@@ -90,3 +90,5 @@ Desktop.ini
 plan
 audit
 reference
+testsprite_tests/tmp/
+testsprite_tests/tmp/config.json

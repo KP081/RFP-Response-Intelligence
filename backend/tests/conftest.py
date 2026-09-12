@@ -1,6 +1,7 @@
 """pytest configuration and fixtures for backend tests."""
 
 import os
+import uuid
 
 # Set test environment variables BEFORE any other imports
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -23,6 +24,14 @@ from app.db.models import Base
 
 SUPERUSER_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/rfp_response"
 APP_USER_DATABASE_URL = "postgresql+asyncpg://app_user:app_password@localhost:5432/rfp_response"
+
+
+async def set_org_context(session: AsyncSession, org_id: uuid.UUID) -> None:
+    """Set the active org for RLS-scoped inserts in tests."""
+    await session.execute(
+        text("SELECT set_config('app.current_org_id', :org_id, true)"),
+        {"org_id": str(org_id)},
+    )
 
 
 @pytest.fixture(autouse=True)

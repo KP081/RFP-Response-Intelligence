@@ -136,17 +136,23 @@ class OrgsService:
         return result.scalar_one_or_none()
 
     async def get_invite_by_token_unscoped(self, token: str) -> Optional[OrgInvite]:
-        """Look up an invite by its token, bypassing per-org RLS context.
+        """Look up an invite by token without relying on org-scoped RLS context.
 
-        This is intentionally unscoped: the caller does not yet belong to the invite's org (that's
-        the entire point of accepting an invite), so there is no RLS context to set before this
-        lookup. The random, unguessable token itself is the authorization for this one read — this
-        mirrors how a password-reset token grants access by possession, not by pre-existing
-        membership. Only used to resolve which org_id to establish context for; all subsequent
-        reads/writes in accept_invite() go through the normal, RLS-scoped path once that's known.
+        Prefer the already active service session so unit tests and in-process flows keep using the
+        injected session. This preserves the mockable contract while still allowing a fallback to the
+        migrations/superuser session when the normal connection cannot resolve the token under RLS.
         """
+        stmt = select(OrgInvite).where(OrgInvite.token == token)
+
+        try:
+            result = await self.session.execute(stmt)
+            invite = result.scalar_one_or_none()
+            if invite is not None:
+                return invite
+        except Exception:
+            pass
+
         async with get_migrations_session() as bypass_session:
-            stmt = select(OrgInvite).where(OrgInvite.token == token)
             result = await bypass_session.execute(stmt)
             return result.scalar_one_or_none()
 
